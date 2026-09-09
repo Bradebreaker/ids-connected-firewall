@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="IDS-Connected Firewall — Manage firewall rules">
+    <title>Firewall Rules — IDS Firewall</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+    <div class="dashboard-layout">
+        <!-- ── Sidebar ──────────────────────────────────────────── -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-icon">🛡️</div>
+                <div>
+                    <h1>IDS Firewall</h1>
+                    <span class="version">v1.0.0</span>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-section-title">Monitoring</div>
+                <a href="/" class="nav-link">
+                    <span class="nav-icon">📊</span><span>Dashboard</span>
+                </a>
+                <a href="/blocked" class="nav-link">
+                    <span class="nav-icon">🚫</span><span>Blocked IPs</span>
+                </a>
+                <div class="nav-section-title">Management</div>
+                <a href="/rules" class="nav-link active">
+                    <span class="nav-icon">📋</span><span>Firewall Rules</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <button class="logout-btn" onclick="logout()">
+                    <span>🚪</span><span>Log Out</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- ── Header ───────────────────────────────────────────── -->
+        <header class="header">
+            <div class="header-left">
+                <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+                <h2 class="header-title">Firewall Rule Editor</h2>
+            </div>
+            <div class="header-right">
+                <div class="threat-indicator level-low" id="threatIndicator">
+                    <span class="threat-dot"></span>
+                    <span id="threatText">LOW</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- ── Main Content ─────────────────────────────────────── -->
+        <main class="main-content">
+            <div class="action-bar">
+                <div>
+                    <div class="page-title">Firewall Rules</div>
+                    <div class="page-subtitle">Priority-ordered rules (first match wins, like a real ACL)</div>
+                </div>
+                <button class="btn btn-primary" onclick="openRuleModal()">
+                    ➕ Add Rule
+                </button>
+            </div>
+
+            <div class="data-table-container">
+                <table class="data-table" id="rulesTable">
+                    <thead>
+                        <tr>
+                            <th>Priority</th>
+                            <th>Source IP</th>
+                            <th>Port</th>
+                            <th>Protocol</th>
+                            <th>Action</th>
+                            <th>Origin</th>
+                            <th>Temp/Perm</th>
+                            <th>Expires</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rulesTableBody">
+                        <tr>
+                            <td colspan="9">
+                                <div class="empty-state">
+                                    <div class="empty-icon">📋</div>
+                                    <p>No firewall rules configured</p>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <!-- ── Add Rule Modal ───────────────────────────────────────── -->
+    <div class="modal-overlay hidden" id="ruleModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">Add Firewall Rule</h3>
+                <button class="modal-close" onclick="closeRuleModal()">✕</button>
+            </div>
+            <form id="ruleForm">
+                <div class="form-group">
+                    <label class="form-label" for="ruleIp">Source IP</label>
+                    <input type="text" id="ruleIp" class="form-input" placeholder="e.g. 10.0.0.50" required>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                    <div class="form-group">
+                        <label class="form-label" for="rulePort">Destination Port</label>
+                        <input type="number" id="rulePort" class="form-input" placeholder="Any" min="1" max="65535">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="ruleProto">Protocol</label>
+                        <select id="ruleProto" class="form-select">
+                            <option value="">Any</option>
+                            <option value="tcp">TCP</option>
+                            <option value="udp">UDP</option>
+                            <option value="icmp">ICMP</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                    <div class="form-group">
+                        <label class="form-label" for="ruleAction">Action</label>
+                        <select id="ruleAction" class="form-select">
+                            <option value="DROP">DROP</option>
+                            <option value="ACCEPT">ACCEPT</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="rulePriority">Priority</label>
+                        <input type="number" id="rulePriority" class="form-input" value="100" min="1" max="9999">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="ruleTemp">Duration</label>
+                    <select id="ruleTemp" class="form-select" onchange="toggleRuleTTL()">
+                        <option value="permanent">Permanent</option>
+                        <option value="temporary">Temporary</option>
+                    </select>
+                </div>
+                <div class="form-group" id="ruleTtlGroup" style="display:none">
+                    <label class="form-label" for="ruleTTL">TTL (seconds)</label>
+                    <input type="number" id="ruleTTL" class="form-input" placeholder="e.g. 3600" min="60" value="1800">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeRuleModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Rule</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/js/firewall.js"></script>
+</body>
+</html>

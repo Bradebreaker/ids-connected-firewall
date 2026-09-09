@@ -1,0 +1,33 @@
+# IDS-Connected Firewall — Python Dependencies
+# Requires Python 3.10+ and Linux with iptables
+
+# Web framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Database
+sqlalchemy==2.0.23
+aiosqlite==0.19.0
+
+# Authentication
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# Validation
+pydantic==2.5.2
+pydantic-settings==2.1.0
+
+# Packet capture
+scapy==2.5.0
+
+# Rate limiting
+slowapi==0.1.9
+
+# Background scheduling
+apscheduler==3.10.4
+
+# Structured logging
+python-json-logger==2.0.7
+
+# ASGI WebSocket support (included with uvicorn[standard])
+websockets==12.0
