@@ -20,57 +20,95 @@ from config import settings
 logger = logging.getLogger("ids.sniffer")
 
 
+from sniffer.packet_event import create_packet_event, format_hex_dump, next_packet_number
+from scapy.all import Ether
+
 def _parse_packet(packet) -> Optional[Dict[str, Any]]:
     """
-    Extract relevant fields from a Scapy packet into a plain dict.
-
+    Extract relevant fields from a Scapy packet into a normalized event dict.
     Returns None for packets we can't meaningfully analyse (e.g. ARP).
     """
-    data: Dict[str, Any] = {
-        "timestamp": time.time(),
-        "source_ip": None,
-        "dest_ip": None,
-        "source_port": None,
-        "dest_port": None,
-        "protocol": None,
-        "tcp_flags": None,
-        "payload": "",
-        "packet_size": len(packet),
-        "raw_summary": packet.summary(),
-    }
+    src_ip = None
+    dst_ip = None
+    ip_version = 4
+    ip_hl = 20
+    ip_ttl = 64
 
     # ── IP layer ──────────────────────────────────────────────────
     if IP in packet:
-        data["source_ip"] = packet[IP].src
-        data["dest_ip"]   = packet[IP].dst
+        src_ip = packet[IP].src
+        dst_ip = packet[IP].dst
+        ip_version = packet[IP].version
+        ip_hl = packet[IP].ihl * 4
+        ip_ttl = packet[IP].ttl
     elif IPv6 in packet:
-        data["source_ip"] = packet[IPv6].src
-        data["dest_ip"]   = packet[IPv6].dst
+        src_ip = packet[IPv6].src
+        dst_ip = packet[IPv6].dst
+        ip_version = 6
+        ip_hl = 40
+        ip_ttl = packet[IPv6].hlim
     else:
         return None  # Skip non-IP traffic (ARP, etc.)
 
+    protocol = "OTHER"
+    sport = None
+    dport = None
+    tcp_flags = ""
+    tcp_seq = None
+    tcp_ack = None
+    tcp_window = 65535
+
     # ── Transport layer ──────────────────────────────────────────
     if TCP in packet:
-        data["protocol"]    = "TCP"
-        data["source_port"] = packet[TCP].sport
-        data["dest_port"]   = packet[TCP].dport
-        # Decode TCP flag bits into human-readable string
-        data["tcp_flags"]   = str(packet[TCP].flags)
+        protocol = "TCP"
+        sport = packet[TCP].sport
+        dport = packet[TCP].dport
+        tcp_flags = str(packet[TCP].flags)
+        tcp_seq = int(packet[TCP].seq)
+        tcp_ack = int(packet[TCP].ack)
+        tcp_window = int(packet[TCP].window)
     elif UDP in packet:
-        data["protocol"]    = "UDP"
-        data["source_port"] = packet[UDP].sport
-        data["dest_port"]   = packet[UDP].dport
+        protocol = "UDP"
+        sport = packet[UDP].sport
+        dport = packet[UDP].dport
     elif ICMP in packet:
-        data["protocol"] = "ICMP"
+        protocol = "ICMP"
 
-    # ── Payload (first 500 bytes for signature matching) ─────────
+    # ── Payload ──────────────────────────────────────────────────
+    payload = ""
+    raw_bytes = bytes(packet)
     if Raw in packet:
         try:
-            data["payload"] = bytes(packet[Raw].load[:500]).decode("utf-8", errors="replace")
+            payload = bytes(packet[Raw].load[:500]).decode("utf-8", errors="replace")
         except Exception:
-            data["payload"] = ""
+            payload = ""
 
-    return data
+    # ── Ethernet ─────────────────────────────────────────────────
+    eth_src = packet[Ether].src if Ether in packet else "00:00:00:00:00:00"
+    eth_dst = packet[Ether].dst if Ether in packet else "00:00:00:00:00:00"
+
+    hex_dump = format_hex_dump(raw_bytes[:128])
+
+    return create_packet_event(
+        source_ip=src_ip,
+        dest_ip=dst_ip or "192.168.1.1",
+        source_port=sport,
+        dest_port=dport,
+        protocol=protocol,
+        tcp_flags=tcp_flags,
+        payload=payload,
+        packet_size=len(packet),
+        raw_summary=packet.summary(),
+        eth_src=eth_src,
+        eth_dst=eth_dst,
+        ip_version=ip_version,
+        ip_hl=ip_hl,
+        ip_ttl=ip_ttl,
+        tcp_seq=tcp_seq,
+        tcp_ack=tcp_ack,
+        tcp_window=tcp_window,
+        hex_dump=hex_dump,
+    )
 
 
 def _sniff_blocking(packet_queue: asyncio.Queue, loop: asyncio.AbstractEventLoop):

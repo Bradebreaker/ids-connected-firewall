@@ -130,6 +130,29 @@ class SynFloodDetector(BaseDetector):
             stats.record_rate(current_count)
             stats.last_window_end = now
 
+        # Immediate volumetric trigger if packet burst reaches min_packets threshold
+        if current_count >= self.min_packets:
+            last_alert = self._alerted.get(src_ip, 0)
+            if now - last_alert >= self.window:
+                self._alerted[src_ip] = now
+                logger.warning(
+                    "Volumetric SYN flood detected from %s: %d SYN packets in %ds window (threshold=%d)",
+                    src_ip, current_count, self.window, self.min_packets,
+                )
+                return AlertEvent(
+                    source_ip=src_ip,
+                    dest_ip=packet_data.get("dest_ip"),
+                    dest_port=packet_data.get("dest_port"),
+                    protocol="TCP",
+                    alert_type="syn_flood",
+                    severity="high",
+                    description=(
+                        f"SYN flood volumetric anomaly: {current_count} SYN packets in {self.window}s "
+                        f"(exceeds threshold {self.min_packets})"
+                    ),
+                    raw_packet=packet_data.get("raw_summary", ""),
+                )
+
         # Need at least a few rate observations for meaningful statistics
         if len(stats.rate_history) < 3:
             return None

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blocked IPs Quarantine — IDS Firewall</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+    <div class="dashboard-layout">
+        <!-- ── Sidebar ──────────────────────────────────────────── -->
+        <aside class="sidebar" id="sidebar"></aside>
+
+        <!-- ── Header ───────────────────────────────────────────── -->
+        <header class="header">
+            <div class="header-left">
+                <button class="mobile-menu-btn" onclick="document.getElementById('sidebar').classList.toggle('mobile-open')">☰</button>
+                <h2 class="header-title">🚫 Host Quarantine Ledger</h2>
+            </div>
+            <div class="header-right">
+                <div class="connection-status">
+                    <span class="connection-dot" id="wsDot"></span>
+                    <span id="wsStatus">CONNECTING</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- ── Main Content ─────────────────────────────────────── -->
+        <main class="main-content">
+            <div class="page-header" style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:20px;">
+                <div>
+                    <h1>Quarantined Threat Actors</h1>
+                    <p>Hosts actively blocked by automated decision engine and manual operator intervention</p>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn btn-primary" onclick="openManualBlockModal()">+ Manually Block IP</button>
+                    <button class="btn btn-secondary" id="btnRefreshBlocks">🔄 Refresh</button>
+                </div>
+            </div>
+
+            <!-- Blocked IPs Table -->
+            <div class="panel glass-panel" style="overflow-x:auto;">
+                <table class="data-table" id="blockedTable" style="width:100%;">
+                    <thead>
+                        <tr>
+                            <th>IP Address</th>
+                            <th>Attack Vector</th>
+                            <th>Enforcement Reason</th>
+                            <th>Severity</th>
+                            <th>Quarantined At</th>
+                            <th>Expiration</th>
+                            <th>Status</th>
+                            <th style="text-align:right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="blockedTableBody">
+                        <tr><td colspan="8" style="text-align:center; padding:30px; color:#64748b;">Loading quarantined hosts...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <!-- ── Confirm Unblock Modal ────────────────────────────────── -->
+    <div class="modal-overlay" id="unblockModal" style="display:none;">
+        <div class="modal-card" style="max-width:440px;">
+            <div class="modal-header">
+                <h3 class="modal-title" style="color:#ef4444;">⚠️ Confirm Unblock Host</h3>
+                <button class="modal-close" onclick="document.getElementById('unblockModal').style.display='none'">✕</button>
+            </div>
+            <div class="modal-body" style="padding:20px;">
+                <p style="color:#cbd5e1; line-height:1.5; margin:0 0 16px 0;">
+                    Are you sure you want to remove host <code id="unblockTargetIp" style="color:#38bdf8; font-weight:700;"></code> from the quarantine list?
+                </p>
+                <p style="font-size:0.8rem; color:#94a3b8; margin:0 0 20px 0;">
+                    This will immediately purge the corresponding drop rule from the active firewall ACL.
+                </p>
+                <div style="display:flex; justify-content:flex-end; gap:10px;">
+                    <button class="btn btn-ghost" onclick="document.getElementById('unblockModal').style.display='none'">Cancel</button>
+                    <button class="btn btn-primary" id="btnConfirmUnblock" style="background:#dc2626; border-color:#ef4444;">Confirm Unblock</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Manual Block Modal ───────────────────────────────────── -->
+    <div class="modal-overlay" id="manualBlockModal" style="display:none;">
+        <div class="modal-card" style="max-width:480px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Quarantine New Host</h3>
+                <button class="modal-close" onclick="document.getElementById('manualBlockModal').style.display='none'">✕</button>
+            </div>
+            <div class="modal-body" style="padding:20px;">
+                <div class="form-group">
+                    <label class="form-label">IPv4 / IPv6 Address</label>
+                    <input type="text" id="manualIpInput" class="form-input" placeholder="e.g. 198.51.100.50" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Quarantine Reason</label>
+                    <input type="text" id="manualReasonInput" class="form-input" placeholder="e.g. Suspicious credential spray detected" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Block Duration</label>
+                    <select id="manualDurationSelect" class="attack-select" style="width:100%;">
+                        <option value="temporary">Temporary (300 seconds)</option>
+                        <option value="permanent">Permanent Block</option>
+                    </select>
+                </div>
+                <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+                    <button class="btn btn-ghost" onclick="document.getElementById('manualBlockModal').style.display='none'">Cancel</button>
+                    <button class="btn btn-primary" id="btnSubmitManualBlock">Enforce Block</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/common.js"></script>
+    <script src="/static/js/nav.js"></script>
+    <script src="/static/js/blocked.js"></script>
+</body>
+</html>

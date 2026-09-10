@@ -283,5 +283,15 @@ async def unblock_ip(
             "data": {"ip_address": body.ip_address},
         })
 
-    logger.info("Manual unblock by %s: %s", _user.username, body.ip_address)
-    return {"detail": f"IP {body.ip_address} unblocked successfully"}
+    logger.info("IP %s unblocked by %s", body.ip_address, _user.username)
+    return {"status": "unblocked", "ip_address": body.ip_address}
+
+
+@router.post("/unblock/{ip_address}", status_code=200)
+async def unblock_ip_path(
+    ip_address: str,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Alias for unblock by path parameter."""
+    return await unblock_ip(UnblockIPRequest(ip_address=ip_address), db, _user)

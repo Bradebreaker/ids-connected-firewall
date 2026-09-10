@@ -19,7 +19,10 @@ import os
 import sys
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+import check_environment
+check_environment.run_preflight_checks()
+
+from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -32,8 +35,16 @@ from config import settings
 from db.database import init_db, async_session
 from db.models import User
 from api.auth import hash_password
+from api.dependencies import get_current_user
 from api.websocket_manager import WebSocketManager
-from api import routes_auth, routes_alerts, routes_firewall, routes_stats
+from api import routes_auth, routes_alerts, routes_firewall, routes_stats, routes_generator, routes_report, routes_system
+from sniffer.packet_event import (
+    record_packet,
+    get_recent_packets,
+    get_recent_buffer_count,
+    get_current_packet_count,
+    reset_recent_packets,
+)
 from firewall.manager import FirewallManager
 from firewall.scheduler import create_scheduler
 from firewall.sync import reconcile
@@ -42,6 +53,7 @@ from detection.signature import SignatureDetector
 from detection.port_scan import PortScanDetector
 from detection.brute_force import BruteForceDetector
 from detection.syn_flood import SynFloodDetector
+from detection.flood import FloodDetector
 
 from sqlalchemy import select
 
@@ -84,12 +96,13 @@ ws_manager = WebSocketManager()
 fw_manager = FirewallManager()
 decision_engine = DecisionEngine(fw_manager, ws_manager)
 
-# Detection pipeline — all four independent detectors
+# Detection pipeline — five independent detectors
 detectors = [
     SignatureDetector(),
     PortScanDetector(),
     BruteForceDetector(),
     SynFloodDetector(),
+    FloodDetector(),
 ]
 
 
@@ -101,8 +114,12 @@ async def detection_pipeline():
     """
     Consumes packets from the queue and runs them through all detectors.
 
-    Each packet is analysed by every detector independently.  If any
-    detector raises an alert, it's passed to the decision engine.
+    Order:
+        1. Run all detectors independently
+        2. If alert triggered, process through decision engine & associate alert_id
+        3. Enrich packet with threat metadata
+        4. Record in thread-safe bounded recent buffer (max 1000)
+        5. Broadcast enriched traffic event over WebSocket
     """
     logger.info("Detection pipeline started — %d detectors active", len(detectors))
 
@@ -116,7 +133,16 @@ async def detection_pipeline():
                     # Process through decision engine
                     async with async_session() as db:
                         try:
-                            await decision_engine.process_alert(alert_event, db)
+                            alert = await decision_engine.process_alert(alert_event, db)
+                            if alert:
+                                packet_data["alert_id"] = alert.id
+                                # Ensure threat level is at least SUSPICIOUS, or MALICIOUS for HIGH/CRITICAL
+                                if alert.severity in ["CRITICAL", "HIGH"]:
+                                    packet_data["threat_level"] = "MALICIOUS"
+                                elif packet_data.get("threat_level") != "MALICIOUS":
+                                    packet_data["threat_level"] = "SUSPICIOUS"
+                                packet_data["threat_type"] = alert.alert_type
+                                packet_data["threat_detail"] = alert.description
                         except Exception as e:
                             logger.error(
                                 "Decision engine error for %s alert: %s",
@@ -128,6 +154,26 @@ async def detection_pipeline():
                     "Detector '%s' error: %s",
                     detector.name, e,
                 )
+
+        # 1. Record packet in bounded rolling buffer for page hydration
+        record_packet(packet_data)
+
+        # 2. Broadcast enriched traffic event over WebSocket
+        ws_count = len(ws_manager._connections)
+        logger.debug(
+            "[TRAFFIC] Broadcast pkt #%s (%s %s -> %s) | Threat: %s | Alert: %s | Clients: %d",
+            packet_data.get("packet_number"),
+            packet_data.get("protocol"),
+            packet_data.get("source_ip"),
+            packet_data.get("dest_ip"),
+            packet_data.get("threat_level"),
+            packet_data.get("alert_id"),
+            ws_count,
+        )
+        await ws_manager.broadcast({
+            "type": "traffic",
+            "data": packet_data
+        })
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -238,6 +284,7 @@ app = FastAPI(
 # ── Rate limiting ─────────────────────────────────────────────────────
 limiter = Limiter(key_func=get_remote_address, default_limits=[settings.RATE_LIMIT_DEFAULT])
 app.state.limiter = limiter
+app.state.packet_queue = packet_queue
 
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
@@ -258,12 +305,48 @@ app.add_middleware(
 # ── Inject managers into route modules ────────────────────────────────
 routes_alerts.set_ws_manager(ws_manager)
 routes_firewall.set_managers(fw_manager, ws_manager)
+routes_system.set_managers(fw_manager, ws_manager)
 
 # ── Include API routers ──────────────────────────────────────────────
 app.include_router(routes_auth.router)
 app.include_router(routes_alerts.router)
 app.include_router(routes_firewall.router)
 app.include_router(routes_stats.router)
+app.include_router(routes_generator.router)
+app.include_router(routes_report.router)
+app.include_router(routes_system.router)
+
+# ── Live Traffic Buffer Hydration Endpoint ────────────────────────────
+@app.get("/api/traffic/recent")
+async def get_recent_traffic(
+    limit: int = 200,
+    _user: User = Depends(get_current_user),
+):
+    """
+    Return recent packets from the in-memory bounded rolling buffer.
+    Provides instant page hydration so full-page navigation preserves live history.
+    """
+    packets = get_recent_packets(limit=min(limit, 1000))
+    return {
+        "packets": packets,
+        "buffer_count": get_recent_buffer_count(),
+        "total_processed": get_current_packet_count(),
+    }
+
+@app.post("/api/traffic/reset")
+async def reset_traffic_session(
+    _user: User = Depends(get_current_user),
+):
+    """
+    Safely reset the in-memory recent packet buffer for traffic demonstration.
+    Does NOT delete database alerts, blocked IPs, firewall rules, or security events.
+    """
+    reset_recent_packets()
+    return {
+        "status": "ok",
+        "message": "Traffic analyzer session buffer reset successfully.",
+        "buffer_count": get_recent_buffer_count(),
+    }
 
 # ── Mount static files ───────────────────────────────────────────────
 static_dir = os.path.join(os.path.dirname(__file__), "static")
@@ -274,24 +357,90 @@ if os.path.isdir(static_dir):
 # ── Serve frontend pages ─────────────────────────────────────────────
 
 @app.get("/")
+@app.get("/index.html")
 async def serve_dashboard():
-    """Serve the main dashboard page."""
+    """Serve the SOC Command Center dashboard."""
     return FileResponse(os.path.join(static_dir, "pages", "index.html"))
 
 @app.get("/login")
+@app.get("/login.html")
 async def serve_login():
-    """Serve the login page."""
+    """Serve the SOC authentication gateway."""
     return FileResponse(os.path.join(static_dir, "pages", "login.html"))
 
+@app.get("/traffic")
+@app.get("/traffic.html")
+async def serve_traffic():
+    """Serve the Live Traffic Analyzer (Wireshark-style SOC viewer)."""
+    return FileResponse(os.path.join(static_dir, "pages", "traffic.html"))
+
+@app.get("/alerts")
+@app.get("/alerts.html")
+async def serve_alerts():
+    """Serve the comprehensive alerts management page."""
+    return FileResponse(os.path.join(static_dir, "pages", "alerts.html"))
+
 @app.get("/blocked")
+@app.get("/blocked-ips")
+@app.get("/blocked-ips.html")
+@app.get("/blocked.html")
 async def serve_blocked():
     """Serve the blocked IPs management page."""
-    return FileResponse(os.path.join(static_dir, "pages", "blocked.html"))
+    target_file = os.path.join(static_dir, "pages", "blocked-ips.html")
+    if not os.path.isfile(target_file):
+        target_file = os.path.join(static_dir, "pages", "blocked.html")
+    return FileResponse(target_file)
 
 @app.get("/rules")
+@app.get("/firewall-rules")
+@app.get("/firewall-rules.html")
+@app.get("/rules.html")
 async def serve_rules():
-    """Serve the firewall rules editor page."""
-    return FileResponse(os.path.join(static_dir, "pages", "rules.html"))
+    """Serve the firewall rules management page."""
+    target_file = os.path.join(static_dir, "pages", "firewall-rules.html")
+    if not os.path.isfile(target_file):
+        target_file = os.path.join(static_dir, "pages", "rules.html")
+    return FileResponse(target_file)
+
+@app.get("/attacks")
+@app.get("/attack-intelligence")
+@app.get("/attack-intelligence.html")
+@app.get("/attacks.html")
+async def serve_attacks():
+    """Serve the Attack Intelligence Center."""
+    target_file = os.path.join(static_dir, "pages", "attack-intelligence.html")
+    if not os.path.isfile(target_file):
+        target_file = os.path.join(static_dir, "pages", "attacks.html")
+    return FileResponse(target_file)
+
+@app.get("/attack-details")
+@app.get("/attack-details.html")
+async def serve_attack_details():
+    """Serve the attack detail analysis page."""
+    return FileResponse(os.path.join(static_dir, "pages", "attack-details.html"))
+
+@app.get("/reports")
+@app.get("/reports.html")
+async def serve_reports():
+    """Serve the Security Report Center."""
+    return FileResponse(os.path.join(static_dir, "pages", "reports.html"))
+
+@app.get("/system-status")
+@app.get("/system-status.html")
+async def serve_system_status():
+    """Serve the System Status and Health Observability page."""
+    return FileResponse(os.path.join(static_dir, "pages", "system-status.html"))
+
+@app.get("/attacks/{attack_name}.html")
+@app.get("/attacks/{attack_name}")
+async def serve_attack_page(attack_name: str):
+    """Serve individual attack intelligence deep-dive pages."""
+    clean_name = attack_name.replace(".html", "")
+    page_path = os.path.join(static_dir, "pages", "attacks", f"{clean_name}.html")
+    if os.path.isfile(page_path):
+        return FileResponse(page_path)
+    # Dynamic fallback to attack-details.html
+    return FileResponse(os.path.join(static_dir, "pages", "attack-details.html"))
 
 
 # ══════════════════════════════════════════════════════════════════════

@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attack Details — IDS Firewall</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+    <div class="dashboard-layout">
+        <!-- ── Sidebar ──────────────────────────────────────────── -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-icon">🛡️</div>
+                <div>
+                    <h1>IDS Firewall</h1>
+                    <span class="version">v1.0.0</span>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-section-title">Monitoring</div>
+                <a href="/" class="nav-item"><span class="nav-icon">📊</span><span>Dashboard</span></a>
+                <a href="/attacks" class="nav-item active"><span class="nav-icon">⚔️</span><span>Attack Intelligence</span></a>
+                <a href="/blocked" class="nav-item"><span class="nav-icon">🚫</span><span>Blocked IPs</span></a>
+                <div class="nav-section-title">Management</div>
+                <a href="/rules" class="nav-item"><span class="nav-icon">📋</span><span>Firewall Rules</span></a>
+            </nav>
+            <div class="sidebar-footer">
+                <button class="logout-btn" onclick="localStorage.removeItem('ids_token');window.location.href='/login'">
+                    <span>🚪</span><span>Log Out</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- ── Header ───────────────────────────────────────────── -->
+        <header class="header">
+            <div class="header-left">
+                <button class="mobile-menu-btn" onclick="document.getElementById('sidebar').classList.toggle('mobile-open')">☰</button>
+                <h2 class="header-title" id="headerTitle">Attack Analysis</h2>
+            </div>
+            <div class="header-right">
+                <a href="/attacks" class="btn btn-ghost" style="font-size:0.85rem;">← Back to Intelligence</a>
+            </div>
+        </header>
+
+        <!-- ── Main Content ─────────────────────────────────────── -->
+        <main class="main-content">
+            <a href="/attacks" class="back-link">← Back to Attack Intelligence</a>
+
+            <div class="detail-header">
+                <div class="detail-icon" id="attackIcon">🛡️</div>
+                <div class="detail-info">
+                    <h1 id="attackName">Loading Attack Analysis...</h1>
+                    <div class="detail-badges">
+                        <span class="badge" id="attackSeverityBadge">SEVERITY</span>
+                        <span class="badge badge-low" id="attackStatusBadge">STATUS: ACTIVE MONITORING</span>
+                        <span class="badge badge-medium" id="attackDetectionCount">0 Detections</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Attack Overview & Defensive Explanation -->
+            <div class="panel glass-panel detail-section">
+                <div class="panel-header">
+                    <span class="panel-title">🛡️ What is this Attack?</span>
+                </div>
+                <div class="panel-body">
+                    <p id="attackExplanation" style="line-height:1.7; color:var(--text-secondary);">
+                        Loading defensive explanation...
+                    </p>
+                </div>
+            </div>
+
+            <!-- Detection Mechanism -->
+            <div class="panel glass-panel detail-section">
+                <div class="panel-header">
+                    <span class="panel-title">🔬 How Our IDS Detects It</span>
+                </div>
+                <div class="panel-body">
+                    <div id="detectionMechanism" style="line-height:1.7; color:var(--text-secondary);">
+                        Loading detection pipeline details...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Observed Indicators & Parameters -->
+            <div class="panel glass-panel detail-section">
+                <div class="panel-header">
+                    <span class="panel-title">📊 Observed Indicators & Configuration Thresholds</span>
+                </div>
+                <div class="panel-body">
+                    <div class="detail-grid" id="indicatorsGrid">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mitigation Policy -->
+            <div class="panel glass-panel detail-section">
+                <div class="panel-header">
+                    <span class="panel-title">⚡ Automated Mitigation & Firewall Action</span>
+                </div>
+                <div class="panel-body">
+                    <div id="mitigationExplanation" style="line-height:1.7; color:var(--text-secondary);">
+                        Loading automated decision policy...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Related Alerts -->
+            <div class="panel glass-panel detail-section">
+                <div class="panel-header">
+                    <span class="panel-title">📋 Recent Incident Records (Database Log)</span>
+                </div>
+                <div class="panel-body" style="max-height: 400px; overflow-y:auto;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Source IP</th>
+                                <th>Destination Port</th>
+                                <th>Protocol</th>
+                                <th>Severity</th>
+                                <th>Description / Signature</th>
+                                <th>Mitigation</th>
+                            </tr>
+                        </thead>
+                        <tbody id="relatedAlertsBody">
+                            <tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px;">Fetching recent incidents...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Alert Modal for details -->
+    <div class="modal-overlay" id="alertModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.7); z-index:9999; align-items:center; justify-content:center;">
+        <div class="modal glass-panel" style="width:600px; max-width:90%; padding:24px; border-radius:12px; position:relative; background:#0f172a; border:1px solid rgba(255,255,255,0.1);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <h3 id="modalAlertTitle" style="color:var(--cyan); margin:0;">Alert Detail</h3>
+                <button onclick="document.getElementById('alertModal').style.display='none'" style="background:none; border:none; color:white; font-size:1.4rem; cursor:pointer;">&times;</button>
+            </div>
+            <div id="modalAlertBody" style="font-size:0.85rem; color:var(--text-secondary); line-height:1.6;">
+            </div>
+            <div style="margin-top:20px; text-align:right;">
+                <button class="btn btn-ghost" onclick="document.getElementById('alertModal').style.display='none'">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        'use strict';
+        const token = localStorage.getItem('ids_token');
+        if (!token) { window.location.href = '/login'; return; }
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const attackType = urlParams.get('type') || 'signature';
+
+        const ATTACK_PROFILES = {
+            'signature': {
+                name: 'Signature-Based Attack Detection',
+                icon: '🔏',
+                severity: 'high',
+                badgeClass: 'badge-high',
+                typeKey: 'signature',
+                explanation: `Signature-based detection inspects incoming packet payloads and requests against a curated library of known threat patterns. Attacks in this category include SQL Injection (SQLi), Cross-Site Scripting (XSS), Log4j / Log4Shell (CVE-2021-44228), Server-Side Request Forgery (SSRF), Directory Traversal (../), and Command Injection / Remote Code Execution (RCE). Defensive detection prevents malicious command strings from reaching downstream web applications and databases.`,
+                detection: `<p>The <strong>SignatureDetector</strong> inspects raw packet payloads by decoding ASCII and UTF-8 payloads and executing pre-compiled regular expressions.</p>
+                <ul>
+                    <li><strong>Inspection Surface:</strong> TCP payloads, HTTP URI query strings, request bodies, and headers.</li>
+                    <li><strong>Signature Library:</strong> 20 strict signatures covering UNION SELECT, &lt;script&gt; injection, jndi:ldap://, /etc/passwd path traversal, and shell execution operators.</li>
+                    <li><strong>Evaluation:</strong> Single-pass O(N) regex evaluation per inbound packet before forwarding or processing.</li>
+                </ul>`,
+                indicators: [
+                    { label: 'Protocols Inspected', value: 'TCP / HTTP / HTTPS' },
+                    { label: 'Target Ports', value: '80 (HTTP), 443 (HTTPS), 8080, 8000' },
+                    { label: 'Evaluation Method', value: 'Regex Pattern Matching over Payload' },
+                    { label: 'Signature Count', value: '20 Active Rules (SQLi, XSS, Log4j, RCE)' },
+                    { label: 'Trigger Threshold', value: '1 Immediate Match (Instant Trigger)' },
+                    { label: 'Severity Classification', value: 'HIGH / CRITICAL' }
+                ],
+                mitigation: `<p>Upon a signature match:</p>
+                <ul>
+                    <li>The <strong>Decision Engine</strong> validates whether the source IP is present in <code>WHITELIST_IPS</code>.</li>
+                    <li>If non-whitelisted, the high-severity alert immediately activates an automated firewall block.</li>
+                    <li>The <strong>Firewall Manager</strong> issues an active block with a default TTL of 3,600 seconds (1 hour). On Linux hosts, an active <code>iptables -I INPUT -s &lt;IP&gt; -j DROP</code> rule is enforced.</li>
+                    <li>A real-time <code>new_alert</code> and <code>ip_blocked</code> event is dispatched to all connected SOC consoles over WebSockets.</li>
+                </ul>`
+            },
+            'port-scan': {
+                name: 'Port Scan Reconnaissance Detection',
+                icon: '🔍',
+                severity: 'medium',
+                badgeClass: 'badge-medium',
+                typeKey: 'port_scan',
+                explanation: `A port scan is an adversarial reconnaissance technique where an attacker systematically probes a range of server ports (e.g., via TCP SYN scans, TCP Connect scans, or UDP probes) to discover listening services and open avenues for exploitation. By identifying port scanners early, defensive firewalls can sever the reconnaissance phase before any vulnerable service is exploited.`,
+                detection: `<p>The <strong>PortScanDetector</strong> leverages an in-memory sliding time window algorithm to track destination port diversity per unique source IP.</p>
+                <ul>
+                    <li><strong>Algorithm:</strong> Sliding window keeping track of <code>(timestamp, destination_port)</code> tuples per source IP.</li>
+                    <li><strong>Config Window:</strong> <code>PORT_SCAN_WINDOW_SECONDS</code> (Default: 60 seconds).</li>
+                    <li><strong>Distinct Port Count:</strong> Calculates the set of unique destination ports targeted within the current sliding window.</li>
+                    <li><strong>Trigger:</strong> If <code>len(unique_ports) &gt;= PORT_SCAN_THRESHOLD</code> (Default: 15 ports), an alert is generated.</li>
+                </ul>`,
+                indicators: [
+                    { label: 'Monitored Protocol', value: 'TCP / UDP' },
+                    { label: 'Destination Ports', value: 'Broad spectrum (1 – 65535)' },
+                    { label: 'Sliding Window', value: '60 Seconds' },
+                    { label: 'Threshold Condition', value: '≥ 15 Distinct Ports probed' },
+                    { label: 'Data Structure', value: 'Collections.deque with automatic eviction' },
+                    { label: 'Severity Classification', value: 'MEDIUM' }
+                ],
+                mitigation: `<p>When a port scan threshold is breached:</p>
+                <ul>
+                    <li>The Decision Engine records a <code>port_scan</code> security alert.</li>
+                    <li>If the scanning rate reaches aggressive levels or crosses severe policy constraints, the source IP is quarantined in the <code>blocked_ips</code> table.</li>
+                    <li>The firewall drops future packets from the offending IP address, preventing the adversary from completing network mapping.</li>
+                </ul>`
+            },
+            'brute-force': {
+                name: 'Brute Force Authentication Detection',
+                icon: '🔑',
+                severity: 'medium',
+                badgeClass: 'badge-medium',
+                typeKey: 'brute_force',
+                explanation: `Brute force attacks involve automated scripts repeatedly guessing credentials or submitting rapid connection attempts against authentication services such as SSH (Port 22), FTP (Port 21), Telnet (Port 23), and RDP (Port 3389). The objective is unauthorized account takeover through credential exhaustion or dictionary attacks.`,
+                detection: `<p>The <strong>BruteForceDetector</strong> monitors high-frequency connection attempts targeting designated sensitive service ports.</p>
+                <ul>
+                    <li><strong>Monitored Ports:</strong> SSH (22), Telnet (23), FTP (21), RDP (3389), MySQL (3306), PostgreSQL (5432).</li>
+                    <li><strong>Rate Evaluation:</strong> Rolling window of connection timestamps per source IP.</li>
+                    <li><strong>Config Window:</strong> <code>BRUTE_FORCE_WINDOW_SECONDS</code> (Default: 30 seconds).</li>
+                    <li><strong>Trigger:</strong> If connection attempts reach or exceed <code>BRUTE_FORCE_THRESHOLD</code> (Default: 10 attempts), a security alert is published.</li>
+                </ul>`,
+                indicators: [
+                    { label: 'Targeted Services', value: 'SSH (22), FTP (21), Telnet (23), RDP (3389)' },
+                    { label: 'Protocol', value: 'TCP (SYN / Handshake attempts)' },
+                    { label: 'Sliding Window', value: '30 Seconds' },
+                    { label: 'Threshold Condition', value: '≥ 10 Connection attempts in window' },
+                    { label: 'State Tracking', value: 'In-memory sliding timestamp deque' },
+                    { label: 'Severity Classification', value: 'MEDIUM / HIGH' }
+                ],
+                mitigation: `<p>When brute force attempts are detected:</p>
+                <ul>
+                    <li>The system records the authentication abuse alert in SQLite.</li>
+                    <li>The Decision Engine initiates firewall rate-limiting or temporary block rules to prevent account lockout of legitimate users and deny further automated guesses.</li>
+                    <li>Administrators can inspect the offending IP on the Blocked IPs page and choose to extend or release the quarantine.</li>
+                </ul>`
+            },
+            'syn-flood': {
+                name: 'SYN Flood (Denial of Service) Detection',
+                icon: '🌊',
+                severity: 'high',
+                badgeClass: 'badge-high',
+                typeKey: 'syn_flood',
+                explanation: `A TCP SYN flood is a volumetric Denial of Service (DoS) attack where an attacker exploits the TCP three-way handshake. By flooding a server with SYN requests and ignoring the server's SYN-ACK responses (or using spoofed IP addresses), the host's half-open connection backlog table is exhausted, denying service to legitimate network traffic.`,
+                detection: `<p>The <strong>SynFloodDetector</strong> implements statistical anomaly detection over TCP SYN packet arrival rates.</p>
+                <ul>
+                    <li><strong>Packet Filtering:</strong> Inspects TCP header flags specifically for <code>SYN == 1</code> and <code>ACK == 0</code>.</li>
+                    <li><strong>Statistical Tracking:</strong> Samples SYN packet count per unit time, maintaining rolling statistical metrics (mean &mu; and standard deviation &sigma;).</li>
+                    <li><strong>Threshold:</strong> Triggers when the instantaneous SYN arrival rate exceeds the baseline expectation (<code>rate &gt; baseline_mean + multiplier * baseline_std</code>) or exceeds the absolute safety ceiling.</li>
+                </ul>`,
+                indicators: [
+                    { label: 'Packet Inspection', value: 'TCP Header Flags (SYN set, ACK clear)' },
+                    { label: 'Target Ports', value: 'All listening TCP services (80, 443, 8080)' },
+                    { label: 'Detection Method', value: 'Statistical Mean & StdDev Anomaly Rate' },
+                    { label: 'Trigger Metric', value: 'SYN rate exceeds statistical ceiling' },
+                    { label: 'Behavioral Pattern', value: 'Rapid half-open TCP connections' },
+                    { label: 'Severity Classification', value: 'HIGH' }
+                ],
+                mitigation: `<p>Mitigation for SYN Floods includes:</p>
+                <ul>
+                    <li>Rapid threat classification by the Decision Engine.</li>
+                    <li>Automatic generation of an immediate kernel-level firewall drop rule for the offending source IP.</li>
+                    <li>Immediate notification broadcast over WebSockets to alert operators of active denial-of-service pressure.</li>
+                </ul>`
+            }
+        };
+
+        const profile = ATTACK_PROFILES[attackType] || ATTACK_PROFILES['signature'];
+
+        // Render header and text
+        document.getElementById('headerTitle').textContent = profile.name;
+        document.getElementById('attackIcon').textContent = profile.icon;
+        document.getElementById('attackName').textContent = profile.name;
+        const sevBadge = document.getElementById('attackSeverityBadge');
+        sevBadge.textContent = profile.severity.toUpperCase() + ' SEVERITY';
+        sevBadge.className = 'badge ' + profile.badgeClass;
+
+        document.getElementById('attackExplanation').innerHTML = profile.explanation;
+        document.getElementById('detectionMechanism').innerHTML = profile.detection;
+        document.getElementById('mitigationExplanation').innerHTML = profile.mitigation;
+
+        // Render indicators grid
+        const grid = document.getElementById('indicatorsGrid');
+        grid.innerHTML = profile.indicators.map(ind => `
+            <div class="detail-field">
+                <div class="label">${ind.label}</div>
+                <div class="value">${ind.value}</div>
+            </div>
+        `).join('');
+
+        const headers = { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' };
+
+        // Fetch stats for total detections
+        fetch('/api/stats', { headers }).then(r => r.json()).then(s => {
+            if (s && s.alerts_by_type) {
+                const count = s.alerts_by_type[profile.typeKey] || 0;
+                document.getElementById('attackDetectionCount').textContent = `${count} Total Detections`;
+            }
+        }).catch(e => console.error('Stats error:', e));
+
+        // Fetch related alerts for this attack type
+        fetch('/api/alerts?limit=50', { headers }).then(r => r.json()).then(alerts => {
+            const tbody = document.getElementById('relatedAlertsBody');
+            const matchingAlerts = alerts.filter(a => a.alert_type === profile.typeKey);
+
+            if (!matchingAlerts.length) {
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:24px;">No ${profile.name} alerts recorded yet in database. Use the Dashboard Traffic Generator to simulate.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = matchingAlerts.map(a => {
+                const time = new Date(a.timestamp).toLocaleString();
+                const blocked = a.auto_blocked ? '<span style="color:#ef4444;font-weight:600;">BLOCKED</span>' : '<span style="color:#f59e0b;">Alert Only</span>';
+                return `<tr style="cursor:pointer;" onclick="openAlertDetail(${a.id})">
+                    <td>${time}</td>
+                    <td><code>${a.source_ip}</code></td>
+                    <td>${a.dest_port || '—'}</td>
+                    <td>${a.protocol || 'TCP'}</td>
+                    <td><span class="badge badge-${a.severity}">${a.severity.toUpperCase()}</span></td>
+                    <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${(a.description||'').substring(0,80)}</td>
+                    <td>${blocked}</td>
+                </tr>`;
+            }).join('');
+        }).catch(e => {
+            console.error('Alerts error:', e);
+            document.getElementById('relatedAlertsBody').innerHTML = `<tr><td colspan="7" style="text-align:center;color:#ef4444;padding:20px;">Failed to load alerts from backend.</td></tr>`;
+        });
+
+        // Modal inspector
+        window.openAlertDetail = async function(id) {
+            try {
+                const res = await fetch(`/api/alerts/${id}`, { headers });
+                if (!res.ok) throw new Error('Failed to load alert');
+                const alert = await res.json();
+                document.getElementById('modalAlertTitle').textContent = `Alert #${alert.id} — ${alert.alert_type}`;
+                document.getElementById('modalAlertBody').innerHTML = `
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+                        <div><strong>Source IP:</strong> <code>${alert.source_ip}</code></div>
+                        <div><strong>Dest IP:</strong> <code>${alert.dest_ip}</code></div>
+                        <div><strong>Dest Port:</strong> ${alert.dest_port || 'N/A'}</div>
+                        <div><strong>Protocol:</strong> ${alert.protocol || 'TCP'}</div>
+                        <div><strong>Severity:</strong> <span class="badge badge-${alert.severity}">${alert.severity.toUpperCase()}</span></div>
+                        <div><strong>Auto-Blocked:</strong> ${alert.auto_blocked ? '<span style="color:#ef4444">YES</span>' : '<span style="color:#22c55e">NO</span>'}</div>
+                        <div><strong>Timestamp:</strong> ${new Date(alert.timestamp).toLocaleString()}</div>
+                    </div>
+                    <div style="margin-top:12px;"><strong>Description:</strong><br><div style="background:rgba(0,0,0,0.3);padding:8px;border-radius:6px;margin-top:4px;">${alert.description}</div></div>
+                    ${alert.raw_packet ? `<div style="margin-top:12px;"><strong>Raw Payload / Match:</strong><pre style="background:rgba(0,0,0,0.4);padding:8px;border-radius:6px;margin-top:4px;overflow-x:auto;max-height:140px;">${alert.raw_packet}</pre></div>` : ''}
+                `;
+                document.getElementById('alertModal').style.display = 'flex';
+            } catch (err) {
+                console.error(err);
+            }
+        };
+
+        // Close on Escape or overlay click
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') document.getElementById('alertModal').style.display = 'none';
+        });
+        document.getElementById('alertModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('alertModal')) document.getElementById('alertModal').style.display = 'none';
+        });
+    })();
+    </script>
+</body>
+</html>

@@ -1,160 +1,166 @@
 /**
- * firewall.js — Firewall rule editor page logic.
- *
- * Handles loading, creating, and deleting firewall rules
- * via the REST API with JWT authentication.
+ * static/js/firewall.js — Firewall ACL & Command Center Client Logic
  */
 
-(function () {
-    'use strict';
+document.addEventListener('DOMContentLoaded', () => {
+    if (!IDS.requireAuth()) return;
 
-    // ── Auth guard ──────────────────────────────────────────────
-    const token = localStorage.getItem('ids_token');
-    if (!token) {
-        window.location.href = '/login';
-        return;
-    }
+    const tableBody = document.getElementById('rulesTableBody');
+    const ruleCountEl = document.getElementById('fwRuleCount');
+    const btnRefresh = document.getElementById('btnRefreshRules');
 
-    const API_BASE = '';
+    const addModal = document.getElementById('addRuleModal');
+    const inputSourceIp = document.getElementById('ruleSourceIp');
+    const inputPriority = document.getElementById('rulePriority');
+    const inputDestPort = document.getElementById('ruleDestPort');
+    const selectProtocol = document.getElementById('ruleProtocol');
+    const selectAction = document.getElementById('ruleAction');
+    const selectDuration = document.getElementById('ruleDuration');
+    const btnSubmitRule = document.getElementById('btnSubmitRule');
 
-    function authHeaders() {
-        return { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' };
-    }
+    // ── WebSocket Lifecycle ──────────────────────────────────────
+    IDS.createWebSocket(
+        (msg) => {
+            if (msg.type === 'ip_blocked' || msg.type === 'ip_unblocked') {
+                loadRules();
+            }
+        },
+        (status) => {
+            const dot = document.getElementById('wsDot');
+            const lbl = document.getElementById('wsStatus');
+            if (!dot || !lbl) return;
+            lbl.textContent = status;
+            dot.style.background = status === 'CONNECTED' ? '#10b981' : (status === 'RECONNECTING' ? '#f59e0b' : '#ef4444');
+            lbl.style.color = dot.style.background;
+        }
+    );
 
-    // ── Global helpers (called from HTML) ───────────────────────
-    window.logout = function () {
-        localStorage.removeItem('ids_token');
-        window.location.href = '/login';
-    };
-
-    window.toggleSidebar = function () {
-        document.getElementById('sidebar').classList.toggle('mobile-open');
-    };
-
-    // ── Load rules ──────────────────────────────────────────────
+    // ── Load Rules ───────────────────────────────────────────────
     async function loadRules() {
         try {
-            const res = await fetch(API_BASE + '/api/rules', { headers: authHeaders() });
-            if (res.status === 401) { window.logout(); return; }
-            const rules = await res.json();
+            const resp = await IDS.apiFetch('/api/rules');
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const rules = await resp.json();
             renderRules(rules);
-        } catch (e) {
-            console.error('Failed to load rules:', e);
+        } catch (err) {
+            tableBody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:30px; color:#ef4444;">Failed to load firewall ACL: ${err.message}</td></tr>`;
         }
     }
 
+    // ── Render Table ─────────────────────────────────────────────
     function renderRules(rules) {
-        const tbody = document.getElementById('rulesTableBody');
-
-        if (!rules.length) {
-            tbody.innerHTML = `
-                <tr><td colspan="9">
-                    <div class="empty-state">
-                        <div class="empty-icon">📋</div>
-                        <p>No firewall rules configured</p>
-                    </div>
-                </td></tr>`;
+        if (!rules || rules.length === 0) {
+            tableBody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:30px; color:#64748b;">No active firewall rules in ACL. All nominal packets accepted.</td></tr>`;
+            if (ruleCountEl) ruleCountEl.textContent = '0 Active';
             return;
         }
 
-        tbody.innerHTML = rules.map(r => `
-            <tr>
-                <td><strong>${r.priority}</strong></td>
-                <td class="ip-cell">${r.source_ip}</td>
-                <td>${r.dest_port || 'Any'}</td>
-                <td>${r.protocol || 'Any'}</td>
-                <td><span class="table-badge ${r.action.toLowerCase()}">${r.action}</span></td>
-                <td><span class="table-badge ${r.rule_type}">${r.rule_type.toUpperCase()}</span></td>
-                <td>
-                    <span class="table-badge ${r.is_temporary ? 'temporary' : 'permanent'}">
-                        ${r.is_temporary ? 'TEMP' : 'PERM'}
-                    </span>
+        if (ruleCountEl) ruleCountEl.textContent = `${rules.filter(r => r.is_active).length} Active`;
+        tableBody.innerHTML = '';
+
+        rules.forEach(r => {
+            const tr = document.createElement('tr');
+
+            const actionBadge = r.action === 'DROP'
+                ? `<span class="badge badge-high" style="background:#7f1d1d;">DROP</span>`
+                : `<span class="badge badge-low">ACCEPT</span>`;
+
+            const statusBadge = r.is_active
+                ? `<span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; border:1px solid rgba(16,185,129,0.3);">● ACTIVE</span>`
+                : `<span class="badge" style="background:#334155; color:#94a3b8;">○ INACTIVE</span>`;
+
+            const typeBadge = `<span class="badge badge-medium" style="font-size:0.75rem;">${(r.rule_type || 'MANUAL').toUpperCase()}</span>`;
+            const durationText = r.is_temporary ? '<span style="color:#f59e0b;">Temporary</span>' : '<span style="color:#94a3b8;">Permanent</span>';
+
+            tr.innerHTML = `
+                <td><strong>#${r.priority}</strong></td>
+                <td style="color:#94a3b8;">INPUT</td>
+                <td><code style="color:#38bdf8; font-weight:700;">${r.source_ip}</code></td>
+                <td>${r.dest_port || 'ANY'}</td>
+                <td>${(r.protocol || 'ANY').toUpperCase()}</td>
+                <td>${actionBadge}</td>
+                <td>${typeBadge}</td>
+                <td>${durationText}</td>
+                <td>${statusBadge}</td>
+                <td style="text-align:right;">
+                    <button class="btn btn-ghost btn-del-rule" data-id="${r.id}" style="padding:4px 10px; font-size:0.75rem; color:#ef4444;" title="Delete rule">Delete</button>
                 </td>
-                <td class="text-muted">${r.expires_at ? new Date(r.expires_at).toLocaleString() : '—'}</td>
-                <td>
-                    <button class="btn btn-danger btn-sm" onclick="deleteRule(${r.id})">
-                        Delete
-                    </button>
-                </td>
-            </tr>
-        `).join('');
+            `;
+
+            tableBody.appendChild(tr);
+        });
+
+        document.querySelectorAll('.btn-del-rule').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const id = btn.dataset.id;
+                if (!confirm(`Are you sure you want to delete firewall rule #${id}?`)) return;
+
+                try {
+                    const resp = await IDS.apiFetch(`/api/rules/${id}`, { method: 'DELETE' });
+                    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                    IDS.showToast(`Firewall rule #${id} purged from ACL`, 'success');
+                    loadRules();
+                } catch (e) {
+                    IDS.showToast(`Failed to delete rule: ${e.message}`, 'error');
+                }
+            });
+        });
     }
 
-    // ── Delete rule ─────────────────────────────────────────────
-    window.deleteRule = async function (id) {
-        if (!confirm('Delete this firewall rule? The iptables entry will be removed.')) return;
+    // ── Add Rule Modal ───────────────────────────────────────────
+    window.openAddRuleModal = function() {
+        inputSourceIp.value = '';
+        inputDestPort.value = '';
+        inputPriority.value = '100';
+        addModal.style.display = 'flex';
+    };
 
-        try {
-            const res = await fetch(API_BASE + `/api/rules/${id}`, {
-                method: 'DELETE',
-                headers: authHeaders(),
-            });
-            if (res.ok || res.status === 204) {
-                loadRules();
-            } else {
-                const err = await res.json();
-                alert(err.detail || 'Failed to delete rule');
-            }
-        } catch (e) {
-            alert('Network error');
+    btnSubmitRule.addEventListener('click', async () => {
+        const ip = inputSourceIp.value.trim();
+        if (!ip) {
+            IDS.showToast('Please enter a valid source host IP.', 'warning');
+            return;
         }
-    };
-
-    // ── Add rule modal ──────────────────────────────────────────
-    window.openRuleModal = function () {
-        document.getElementById('ruleModal').classList.remove('hidden');
-    };
-
-    window.closeRuleModal = function () {
-        document.getElementById('ruleModal').classList.add('hidden');
-    };
-
-    window.toggleRuleTTL = function () {
-        const show = document.getElementById('ruleTemp').value === 'temporary';
-        document.getElementById('ruleTtlGroup').style.display = show ? 'block' : 'none';
-    };
-
-    document.getElementById('ruleForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-
-        const isTemp = document.getElementById('ruleTemp').value === 'temporary';
-        const portVal = document.getElementById('rulePort').value;
-        const protoVal = document.getElementById('ruleProto').value;
 
         const body = {
-            source_ip: document.getElementById('ruleIp').value.trim(),
-            action: document.getElementById('ruleAction').value,
-            priority: parseInt(document.getElementById('rulePriority').value) || 100,
-            is_temporary: isTemp,
+            source_ip: ip,
+            priority: parseInt(inputPriority.value || '100', 10),
+            dest_port: inputDestPort.value ? parseInt(inputDestPort.value, 10) : null,
+            protocol: selectProtocol.value || null,
+            action: selectAction.value,
+            is_temporary: selectDuration.value === 'temporary',
         };
 
-        if (portVal) body.dest_port = parseInt(portVal);
-        if (protoVal) body.protocol = protoVal;
-        if (isTemp) {
-            body.ttl_seconds = parseInt(document.getElementById('ruleTTL').value) || 1800;
-        }
-
         try {
-            const res = await fetch(API_BASE + '/api/rules', {
+            btnSubmitRule.disabled = true;
+            btnSubmitRule.textContent = 'Deploying...';
+            const resp = await IDS.apiFetch('/api/rules', {
                 method: 'POST',
-                headers: authHeaders(),
-                body: JSON.stringify(body),
+                body: JSON.stringify(body)
             });
-
-            if (res.ok || res.status === 201) {
-                window.closeRuleModal();
-                loadRules();
-            } else {
-                const err = await res.json();
-                alert(err.detail || 'Failed to create rule');
+            if (!resp.ok) {
+                const errData = await resp.json().catch(() => ({}));
+                throw new Error(errData.detail || `HTTP ${resp.status}`);
             }
-        } catch (e) {
-            alert('Network error');
+            IDS.showToast(`Rule for ${ip} deployed into firewall ACL!`, 'success');
+            addModal.style.display = 'none';
+            loadRules();
+        } catch (err) {
+            IDS.showToast(`Rule deployment failed: ${err.message}`, 'error');
+        } finally {
+            btnSubmitRule.disabled = false;
+            btnSubmitRule.textContent = 'Deploy Rule';
         }
     });
 
-    // ── Init ────────────────────────────────────────────────────
-    loadRules();
-    setInterval(loadRules, 15000);
+    btnRefresh.addEventListener('click', () => {
+        btnRefresh.textContent = 'Refreshing...';
+        loadRules().then(() => {
+            btnRefresh.textContent = '🔄 Refresh State';
+            IDS.showToast('Firewall ACL state synchronized', 'info');
+        });
+    });
 
-})();
+    // Initial load
+    loadRules();
+});

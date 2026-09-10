@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Status & Diagnostics — IDS Firewall</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+    <div class="dashboard-layout">
+        <!-- ── Sidebar ──────────────────────────────────────────── -->
+        <aside class="sidebar" id="sidebar"></aside>
+
+        <!-- ── Header ───────────────────────────────────────────── -->
+        <header class="header">
+            <div class="header-left">
+                <button class="mobile-menu-btn" onclick="document.getElementById('sidebar').classList.toggle('mobile-open')">☰</button>
+                <h2 class="header-title">⚡ System Status & Subsystem Diagnostics</h2>
+            </div>
+            <div class="header-right">
+                <div class="connection-status">
+                    <span class="connection-dot" id="wsDot"></span>
+                    <span id="wsStatus">CONNECTING</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- ── Main Content ─────────────────────────────────────── -->
+        <main class="main-content">
+            <div class="page-header" style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:20px;">
+                <div>
+                    <h1>Subsystem Health & Observability</h1>
+                    <p>Live health matrix and telemetry diagnostics across all backend, database, detection, and firewall services</p>
+                </div>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <span style="font-size:0.8rem; color:#94a3b8;">Uptime: <strong id="sysUptimeVal" style="color:#10b981;">—</strong></span>
+                    <button class="btn btn-secondary" id="btnRefreshStatus">🔄 Refresh Diagnostics</button>
+                </div>
+            </div>
+
+            <!-- Global Operational Metrics -->
+            <div class="stats-grid" style="margin-bottom:24px;">
+                <div class="stat-card">
+                    <div class="stat-value" id="statSysPackets" style="color:#38bdf8;">0</div>
+                    <div class="stat-label">Total Ingested Packets</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statSysAlerts" style="color:#f8fafc;">0</div>
+                    <div class="stat-label">Detected Intrusion Alerts</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statSysBlocks" style="color:#ef4444;">0</div>
+                    <div class="stat-label">Active Host Quarantines</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statSysWsClients" style="color:#10b981;">0</div>
+                    <div class="stat-label">Live WebSocket Sessions</div>
+                </div>
+            </div>
+
+            <!-- Component Health Matrix -->
+            <div class="status-grid" id="componentsGrid">
+                <!-- Populated dynamically by system_status.js -->
+            </div>
+
+            <!-- Host Runtime Environment Details -->
+            <div class="panel glass-panel" style="padding:24px;">
+                <h3 style="margin-top:0; font-size:1rem; color:#fff; border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:10px;">Platform & Engine Runtime Environment</h3>
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:16px; font-size:0.88rem; margin-top:14px;">
+                    <div><span style="color:#94a3b8;">Host OS:</span> <strong id="envOs" style="color:#f8fafc; font-family:monospace;">—</strong></div>
+                    <div><span style="color:#94a3b8;">Python Runtime:</span> <strong id="envPython" style="color:#f8fafc; font-family:monospace;">—</strong></div>
+                    <div><span style="color:#94a3b8;">App Release:</span> <strong id="envVersion" style="color:#38bdf8; font-family:monospace;">—</strong></div>
+                    <div><span style="color:#94a3b8;">Database Size:</span> <strong id="envDbSize" style="color:#f8fafc; font-family:monospace;">—</strong></div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script src="/static/js/common.js"></script>
+    <script src="/static/js/nav.js"></script>
+    <script src="/static/js/system_status.js"></script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+# Virtual Environment
+venv/
+.venv/
+env/
+
+# Python Cache & Compiled Files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+*.pyo
+
+# Databases & Runtime Data
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Log Files
+logs/*.log
+*.log
+
+# Scratch / Temporary Test Scripts
+scratch/
+.system_generated/
+.idea/
+.vscode/
+.DS_Store

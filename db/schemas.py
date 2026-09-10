@@ -179,3 +179,6 @@ class StatsResponse(BaseModel):
     top_attacker: Optional[str] = None
     alerts_per_hour: List[dict]       # [{"hour": "2024-01-01T12:00", "count": N}, ...]
     threat_level: str                 # "low" / "medium" / "high" / "critical"
+    top_attackers: Optional[List[dict]] = None
+    top_ports: Optional[List[dict]] = None
+    top_protocols: Optional[dict] = None

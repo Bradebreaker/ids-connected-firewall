@@ -53,27 +53,45 @@ async def get_stats(
         )
         severity_counts[sev] = r.scalar() or 0
 
-    # Alerts by type
+    # Alerts by type (base 4 plus any dynamic types in DB)
     type_counts = {"signature": 0, "port_scan": 0, "brute_force": 0, "syn_flood": 0}
-    for atype in type_counts:
-        r = await db.execute(
-            select(func.count(Alert.id)).where(Alert.alert_type == atype)
-        )
-        type_counts[atype] = r.scalar() or 0
+    r_types = await db.execute(
+        select(Alert.alert_type, func.count(Alert.id)).group_by(Alert.alert_type)
+    )
+    for atype, cnt in r_types.all():
+        type_counts[atype] = cnt
 
     # Active blocks
     blocks_result = await db.execute(select(func.count(BlockedIP.id)))
     active_blocks = blocks_result.scalar() or 0
 
-    # Top attacker (IP with most alerts)
+    # Top attackers (IP with alert count)
     top_result = await db.execute(
         select(Alert.source_ip, func.count(Alert.id).label("cnt"))
         .group_by(Alert.source_ip)
         .order_by(desc("cnt"))
-        .limit(1)
+        .limit(5)
     )
-    top_row = top_result.first()
-    top_attacker = top_row[0] if top_row else None
+    top_attackers_list = [{"ip": row[0], "count": row[1]} for row in top_result.all()]
+    top_attacker = top_attackers_list[0]["ip"] if top_attackers_list else None
+
+    # Top targeted destination ports
+    ports_result = await db.execute(
+        select(Alert.dest_port, func.count(Alert.id).label("cnt"))
+        .where(Alert.dest_port != None)
+        .group_by(Alert.dest_port)
+        .order_by(desc("cnt"))
+        .limit(5)
+    )
+    top_ports = [{"port": row[0], "count": row[1]} for row in ports_result.all()]
+
+    # Protocol breakdown
+    proto_result = await db.execute(
+        select(Alert.protocol, func.count(Alert.id).label("cnt"))
+        .where(Alert.protocol != None)
+        .group_by(Alert.protocol)
+    )
+    proto_dict = {row[0]: row[1] for row in proto_result.all()}
 
     # Alerts per hour (last 24h)
     alerts_per_hour = []
@@ -127,4 +145,7 @@ async def get_stats(
         top_attacker=top_attacker,
         alerts_per_hour=alerts_per_hour,
         threat_level=threat_level,
+        top_attackers=top_attackers_list,
+        top_ports=top_ports,
+        top_protocols=proto_dict,
     )

@@ -5,7 +5,7 @@ api/routes_alerts.py — Alert list endpoint and live WebSocket feed.
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 
@@ -29,34 +29,102 @@ def set_ws_manager(manager):
 
 @router.get("/alerts", response_model=list[AlertOut])
 async def list_alerts(
-    severity: Optional[str] = Query(None, pattern="^(low|medium|high)$"),
+    response: Response,
+    severity: Optional[str] = Query(None, pattern="^(low|medium|high|critical)$"),
     alert_type: Optional[str] = Query(None),
+    source_ip: Optional[str] = Query(None),
+    dest_ip: Optional[str] = Query(None),
+    protocol: Optional[str] = Query(None),
+    auto_blocked: Optional[bool] = Query(None),
+    search: Optional[str] = Query(None),
+    date_filter: Optional[str] = Query(None),
+    sort_by: str = Query("timestamp"),
+    sort_dir: str = Query("desc"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):
     """
-    List alerts with optional filters, newest first.
-
-    Query params:
-        - severity: filter by low/medium/high
-        - alert_type: filter by signature/port_scan/brute_force/syn_flood
-        - limit: max results (default 50, max 500)
-        - offset: pagination offset
+    List alerts with rich multi-parameter filters, search, sorting, and pagination.
     """
-    query = select(Alert).order_by(desc(Alert.timestamp))
+    from datetime import datetime, timedelta
+    from sqlalchemy import func, or_
+
+    query = select(Alert)
 
     if severity:
         query = query.where(Alert.severity == severity)
     if alert_type:
         query = query.where(Alert.alert_type == alert_type)
+    if source_ip:
+        query = query.where(Alert.source_ip.contains(source_ip))
+    if dest_ip:
+        query = query.where(Alert.dest_ip.contains(dest_ip))
+    if protocol:
+        query = query.where(Alert.protocol.ilike(protocol))
+    if auto_blocked is not None:
+        query = query.where(Alert.auto_blocked == auto_blocked)
+    if search:
+        s = f"%{search}%"
+        query = query.where(
+            or_(
+                Alert.source_ip.like(s),
+                Alert.dest_ip.like(s),
+                Alert.description.like(s),
+                Alert.alert_type.like(s),
+            )
+        )
+    if date_filter:
+        now = datetime.utcnow()
+        if date_filter == "today":
+            today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            query = query.where(Alert.timestamp >= today_start)
+        elif date_filter in ["24h", "yesterday"]:
+            query = query.where(Alert.timestamp >= now - timedelta(hours=24))
+        elif date_filter == "7d":
+            query = query.where(Alert.timestamp >= now - timedelta(days=7))
+
+    # Count total matching
+    count_query = select(func.count()).select_from(query.subquery())
+    total_count_res = await db.execute(count_query)
+    total_count = total_count_res.scalar() or 0
+    response.headers["X-Total-Count"] = str(total_count)
+
+    # Sorting
+    sort_column = Alert.timestamp
+    if sort_by == "severity":
+        sort_column = Alert.severity
+    elif sort_by == "source_ip":
+        sort_column = Alert.source_ip
+    elif sort_by == "id":
+        sort_column = Alert.id
+
+    if sort_dir.lower() == "asc":
+        query = query.order_by(sort_column.asc())
+    else:
+        query = query.order_by(sort_column.desc())
 
     query = query.offset(offset).limit(limit)
     result = await db.execute(query)
     alerts = result.scalars().all()
 
     return alerts
+
+
+@router.get("/alerts/{alert_id}", response_model=AlertOut)
+async def get_alert(
+    alert_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Fetch a single alert by ID."""
+    result = await db.execute(select(Alert).where(Alert.id == alert_id))
+    alert = result.scalar_one_or_none()
+    if not alert:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return alert
 
 
 @router.websocket("/ws/alerts")

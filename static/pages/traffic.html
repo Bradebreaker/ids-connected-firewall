@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Traffic Analyzer — IDS Firewall</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+    <div class="dashboard-layout">
+        <!-- ── Sidebar (Populated by nav.js) ───────────────────── -->
+        <aside class="sidebar" id="sidebar"></aside>
+
+        <!-- ── Header ───────────────────────────────────────────── -->
+        <header class="header">
+            <div class="header-left">
+                <button class="mobile-menu-btn" onclick="document.getElementById('sidebar').classList.toggle('mobile-open')">☰</button>
+                <h2 class="header-title">📡 Live Traffic Analyzer</h2>
+            </div>
+            <div class="header-right">
+                <div class="traffic-metrics-bar" style="display:flex; gap:16px; font-size:0.8rem; font-family:'JetBrains Mono',monospace;">
+                    <div><span style="color:#94a3b8;">Rate:</span> <strong id="ratePackets" style="color:#38bdf8;">0</strong> pkt/s</div>
+                    <div><span style="color:#94a3b8;">Throughput:</span> <strong id="rateBytes" style="color:#38bdf8;">0</strong> B/s</div>
+                    <div><span style="color:#94a3b8;">Total:</span> <strong id="totalPacketsCount" style="color:#f8fafc;">0</strong></div>
+                    <div><span style="color:#94a3b8;">Threats:</span> <strong id="threatPacketsCount" style="color:#ef4444;">0</strong></div>
+                </div>
+                <div class="connection-status">
+                    <span class="connection-dot" id="wsDot"></span>
+                    <span id="wsStatus">CONNECTING</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- ── Main Traffic View ────────────────────────────────── -->
+        <main class="main-content" style="padding: 16px 24px; display:flex; flex-direction:column; gap:12px; height: calc(100vh - 70px);">
+            
+            <!-- Quick Traffic Generator Bar -->
+            <div class="traffic-generator-toolbar" style="display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.03); border:1px solid var(--glass-border); border-radius:8px; padding:6px 12px; font-size:0.8rem; flex-wrap:wrap;">
+                <span style="font-weight:600; color:var(--text-secondary); display:flex; align-items:center; gap:6px;">
+                    <span>⚡</span> Traffic Generator:
+                </span>
+                <button class="btn btn-secondary" id="btnGenNormal" style="padding:4px 10px; font-size:0.75rem; border-color:rgba(16,185,129,0.3); color:#a7f3d0;">
+                    🟢 Generate Normal Traffic
+                </button>
+                <button class="btn btn-secondary" id="btnGenPortScan" style="padding:4px 10px; font-size:0.75rem; border-color:rgba(245,158,11,0.3); color:#fde68a;">
+                    ⚡ Generate Port Scan (SYN)
+                </button>
+                <button class="btn btn-secondary" id="btnGenBurst" style="padding:4px 10px; font-size:0.75rem; border-color:rgba(239,68,68,0.3); color:#fca5a5;">
+                    💥 Generate Attack Burst
+                </button>
+                <button class="btn btn-ghost" id="btnResetTraffic" style="padding:4px 10px; font-size:0.75rem; color:#f87171; border:1px solid rgba(239,68,68,0.3); margin-left:4px;" title="Reset live traffic demonstration session">
+                    ↻ RESET
+                </button>
+
+                <!-- Traffic Generator Status Area -->
+                <div id="genStatusContainer" style="margin-left:auto; display:flex; align-items:center; gap:8px; font-family:'JetBrains Mono',monospace; font-size:0.75rem;">
+                    <span id="genStatusBadge" class="badge" style="background:rgba(255,255,255,0.06); color:#94a3b8; font-weight:700;">READY</span>
+                    <span id="genStatusDetail" style="color:#cbd5e1;">Awaiting generation command</span>
+                </div>
+            </div>
+
+            <!-- Controls & Filter Bar -->
+            <div class="traffic-filter-bar">
+                <div class="filter-input-wrap">
+                    <span class="filter-icon">🔍</span>
+                    <input type="text" id="trafficFilterInput" class="filter-input" placeholder="Apply display filter (e.g. tcp.port == 80, ip.addr == 192.168.1.1, tcp, udp, suspicious, malicious)..." />
+                </div>
+
+                <div class="quick-filters">
+                    <button class="quick-pill active" data-filter="all">ALL</button>
+                    <button class="quick-pill" data-filter="tcp">TCP</button>
+                    <button class="quick-pill" data-filter="udp">UDP</button>
+                    <button class="quick-pill" data-filter="icmp">ICMP</button>
+                    <button class="quick-pill" data-filter="http">HTTP</button>
+                    <button class="quick-pill" data-filter="dns">DNS</button>
+                    <button class="quick-pill" data-filter="suspicious">SUSPICIOUS</button>
+                    <button class="quick-pill" data-filter="malicious">MALICIOUS</button>
+                </div>
+
+                <div style="display:flex; gap:8px; margin-left:auto;">
+                    <button class="btn btn-primary" id="btnPauseResume" style="padding:6px 14px; font-size:0.82rem;">⏸ Pause</button>
+                    <button class="btn btn-ghost" id="btnClearTable" style="padding:6px 12px; font-size:0.82rem;">🗑 Clear</button>
+                    <button class="btn btn-ghost" id="btnAutoScroll" style="padding:6px 12px; font-size:0.82rem; color:var(--cyan);">⬇ Auto-scroll: ON</button>
+                    <button class="btn btn-ghost" id="btnExportCapture" style="padding:6px 12px; font-size:0.82rem;">💾 Export JSON</button>
+                </div>
+            </div>
+
+            <!-- Packet Stream Table -->
+            <div class="packet-table-wrapper" id="packetTableContainer">
+                <table class="packet-table" id="packetTable">
+                    <thead>
+                        <tr>
+                            <th style="width:60px;">No.</th>
+                            <th style="width:110px;">Time</th>
+                            <th style="width:140px;">Source</th>
+                            <th style="width:140px;">Destination</th>
+                            <th style="width:70px;">Protocol</th>
+                            <th style="width:80px;">Src Port</th>
+                            <th style="width:80px;">Dst Port</th>
+                            <th style="width:65px;">Length</th>
+                            <th style="width:80px;">Flags</th>
+                            <th>Summary / Info</th>
+                            <th style="width:100px;">Threat</th>
+                        </tr>
+                    </thead>
+                    <tbody id="packetTableBody">
+                        <tr id="emptyRow">
+                            <td colspan="11" style="text-align:center; padding:60px 20px; color:#64748b;">
+                                <div style="font-size:1.8rem; margin-bottom:8px;">📡</div>
+                                <div style="font-size:1rem; font-weight:600; color:#94a3b8;">Listening for live network traffic...</div>
+                                <div style="font-size:0.85rem; margin-top:4px;">Inject synthetic packets from Dashboard or run network traffic to see packets in real-time.</div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Wireshark-Style 7-Layer Packet Detail Inspector -->
+            <div class="packet-detail-drawer" id="packetDetailDrawer" style="display:none;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span style="font-size:1.1rem;">🔬</span>
+                        <h3 style="margin:0; font-size:0.95rem; color:#fff;" id="detailHeader">Packet #— Deep Inspection</h3>
+                        <span id="detailThreatBadge" class="badge">NORMAL</span>
+                    </div>
+                    <button class="btn btn-ghost" onclick="document.getElementById('packetDetailDrawer').style.display='none'" style="padding:2px 8px; font-size:0.9rem;">✕</button>
+                </div>
+
+                <div class="inspector-tabs">
+                    <div class="inspector-tab active" data-tab="tree">Layer Breakdown (OSI)</div>
+                    <div class="inspector-tab" data-tab="payload">Decoded Payload</div>
+                    <div class="inspector-tab" data-tab="hex">Hexadecimal Dump</div>
+                    <div class="inspector-tab" data-tab="security">Security Analysis</div>
+                </div>
+
+                <!-- Tab 1: Tree Breakdown -->
+                <div id="tabTree" class="inspector-content">
+                    <div class="inspector-tree" id="inspectorTreeContent">
+                        <!-- Filled by JS -->
+                    </div>
+                </div>
+
+                <!-- Tab 2: Decoded Payload -->
+                <div id="tabPayload" class="inspector-content" style="display:none;">
+                    <div class="hex-view-container" id="payloadDecodedView" style="color:#a7f3d0;">
+                        No application payload in this packet.
+                    </div>
+                </div>
+
+                <!-- Tab 3: Hex View -->
+                <div id="tabHex" class="inspector-content" style="display:none;">
+                    <div class="hex-view-container" id="hexDumpView">
+                        0000  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+                    </div>
+                </div>
+
+                <!-- Tab 4: Security Analysis -->
+                <div id="tabSecurity" class="inspector-content" style="display:none;">
+                    <div id="securityAnalysisContent" style="padding:10px; background:rgba(255,255,255,0.02); border-radius:6px; font-size:0.85rem; line-height:1.6;">
+                        <!-- Filled by JS -->
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- ── Reset Confirmation Modal ──────────────────────────────── -->
+    <div class="modal-backdrop" id="resetModalBackdrop" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); backdrop-filter:blur(4px); z-index:100000; align-items:center; justify-content:center;">
+        <div class="modal-card" style="background:#0f172a; border:1px solid rgba(239,68,68,0.4); border-radius:12px; padding:24px; max-width:480px; width:90%; box-shadow:0 25px 50px -12px rgba(0,0,0,0.8);">
+            <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+                <div style="font-size:1.8rem;">↻</div>
+                <div>
+                    <h3 style="margin:0; font-size:1.15rem; color:#f8fafc;">Reset live traffic?</h3>
+                    <div style="font-size:0.8rem; color:#94a3b8; margin-top:2px;">Traffic Demonstration Session State</div>
+                </div>
+            </div>
+            <p style="font-size:0.88rem; color:#cbd5e1; line-height:1.6; margin-bottom:20px;">
+                This will clear the current live traffic view and reset traffic-analyzer session metrics.
+                <br><br>
+                <strong style="color:#10b981;">Note:</strong> Existing alerts, blocked IPs, firewall rules, and database history will <strong>NOT</strong> be deleted.
+            </p>
+            <div style="display:flex; justify-content:flex-end; gap:10px;">
+                <button class="btn btn-secondary" id="btnCancelReset" style="padding:8px 16px;">Cancel</button>
+                <button class="btn btn-danger" id="btnConfirmReset" style="padding:8px 18px; background:#dc2626; color:#fff; font-weight:600;">Reset</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/common.js"></script>
+    <script src="/static/js/nav.js"></script>
+    <script src="/static/js/traffic.js"></script>
+</body>
+</html>

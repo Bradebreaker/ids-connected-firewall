@@ -3,57 +3,214 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="IDS-Connected Firewall — Login to the security dashboard">
-    <title>Login — IDS Firewall Dashboard</title>
+    <meta name="description" content="IDS-Connected Firewall — Secure SOC Administrator Gateway">
+    <title>SOC Authentication Gateway — IDS Firewall</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/dashboard.css">
+    <style>
+        body {
+            overflow: hidden;
+            position: relative;
+        }
+        #cyberCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+            opacity: 0.4;
+            pointer-events: none;
+        }
+        .login-page {
+            position: relative;
+            z-index: 2;
+            display: grid;
+            grid-template-columns: 1.1fr 0.9fr;
+            min-height: 100vh;
+        }
+        @media (max-width: 900px) {
+            .login-page {
+                grid-template-columns: 1fr;
+            }
+            .login-left {
+                display: none;
+            }
+        }
+        .login-left {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 60px;
+            background: radial-gradient(circle at 30% 50%, rgba(14, 165, 233, 0.1) 0%, transparent 60%);
+        }
+        .login-right {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            background: rgba(10, 14, 26, 0.7);
+            backdrop-filter: blur(16px);
+            border-left: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .login-card {
+            width: 100%;
+            max-width: 440px;
+            padding: 36px;
+            border-radius: 14px;
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7);
+        }
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(51, 65, 85, 0.6);
+        }
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+        .status-dot.online { background: #10b981; box-shadow: 0 0 6px #10b981; }
+        .status-dot.active { background: #38bdf8; box-shadow: 0 0 6px #38bdf8; }
+        .status-dot.offline { background: #ef4444; }
+    </style>
 </head>
 <body>
+    <!-- Subtle Background Network Mesh Canvas -->
+    <canvas id="cyberCanvas"></canvas>
+
     <div class="login-page">
-        <div class="login-card">
-            <div class="login-header">
-                <div class="login-icon">🛡️</div>
-                <h2>IDS Firewall</h2>
-                <p>Sign in to the security dashboard</p>
+        <!-- Left: Threat Platform Overview -->
+        <div class="login-left">
+            <div class="login-branding" style="max-width: 520px;">
+                <div style="display:inline-flex; align-items:center; gap:8px; background:rgba(56,189,248,0.1); border:1px solid rgba(56,189,248,0.25); padding:6px 14px; border-radius:20px; margin-bottom:20px;">
+                    <span style="font-size:0.8rem; color:#38bdf8; font-weight:700;">ENTERPRISE PERIMETER DEFENSE</span>
+                </div>
+                <h1 style="font-size: 3rem; font-weight: 800; line-height: 1.1; margin-bottom: 12px; letter-spacing: -1px; color:#fff;">
+                    IDS <span style="color:#38bdf8; text-shadow: 0 0 20px rgba(56,189,248,0.4);">FIREWALL</span>
+                </h1>
+                <p class="tagline" style="font-size: 1.15rem; color: #94a3b8; margin-bottom: 32px; font-weight: 500;">
+                    Connected Network Defense · Real-Time Intrusion Detection &amp; Automated Mitigation
+                </p>
+
+                <div class="login-features" style="display:flex; flex-direction:column; gap:16px;">
+                    <div class="login-feature" style="display:flex; gap:14px; align-items:flex-start;">
+                        <div class="login-feature-icon" style="font-size:1.3rem; background:rgba(30,41,59,0.8); padding:8px; border-radius:8px; border:1px solid #334155;">🛡️</div>
+                        <div>
+                            <strong style="color:#f8fafc; font-size:0.95rem;">23 Multi-Vector Threat Analyzers</strong>
+                            <p style="color:#64748b; font-size:0.82rem; margin:2px 0 0 0;">Signatures, Port Scans, Brute Force, SYN &amp; UDP Floods, Injections &amp; API Abuse.</p>
+                        </div>
+                    </div>
+                    <div class="login-feature" style="display:flex; gap:14px; align-items:flex-start;">
+                        <div class="login-feature-icon" style="font-size:1.3rem; background:rgba(30,41,59,0.8); padding:8px; border-radius:8px; border:1px solid #334155;">⚡</div>
+                        <div>
+                            <strong style="color:#f8fafc; font-size:0.95rem;">Live Wireshark Protocol Analyzer</strong>
+                            <p style="color:#64748b; font-size:0.82rem; margin:2px 0 0 0;">7-layer OSI frame decomposition, packet hex dumps, and live telemetry capture.</p>
+                        </div>
+                    </div>
+                    <div class="login-feature" style="display:flex; gap:14px; align-items:flex-start;">
+                        <div class="login-feature-icon" style="font-size:1.3rem; background:rgba(30,41,59,0.8); padding:8px; border-radius:8px; border:1px solid #334155;">🛑</div>
+                        <div>
+                            <strong style="color:#f8fafc; font-size:0.95rem;">Autonomous Firewall Orchestration</strong>
+                            <p style="color:#64748b; font-size:0.82rem; margin:2px 0 0 0;">Sub-second iptables dropping with automated TTL expiration scheduler &amp; whitelisting.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System Telemetry Badges -->
+                <div style="margin-top: 36px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                    <div class="status-pill">
+                        <span class="status-dot online" id="loginApiDot"></span>
+                        <span style="color:#94a3b8;">API GATEWAY:</span>
+                        <span style="color:#10b981;" id="loginApiStatus">ONLINE</span>
+                    </div>
+                    <div class="status-pill">
+                        <span class="status-dot active" id="loginFwDot"></span>
+                        <span style="color:#94a3b8;">FIREWALL ENGINE:</span>
+                        <span style="color:#38bdf8;" id="loginFwStatus">ACTIVE</span>
+                    </div>
+                    <div class="status-pill">
+                        <span style="color:#64748b;">VERSION:</span>
+                        <span style="color:#cbd5e1; font-family:monospace;">v1.0.0</span>
+                    </div>
+                </div>
             </div>
+        </div>
 
-            <div id="loginError" class="login-error"></div>
-
-            <form id="loginForm" class="login-form">
-                <div class="form-group">
-                    <label class="form-label" for="username">Username</label>
-                    <input
-                        type="text"
-                        id="username"
-                        class="form-input"
-                        placeholder="Enter username"
-                        autocomplete="username"
-                        required
-                    >
+        <!-- Right: SOC Authentication Gateway -->
+        <div class="login-right">
+            <div class="login-card glass-panel">
+                <div class="login-card-header" style="text-align:center; margin-bottom:28px;">
+                    <div style="width:56px; height:56px; margin:0 auto 14px; background:rgba(56,189,248,0.1); border:1px solid rgba(56,189,248,0.3); border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:1.8rem;">
+                        🛡️
+                    </div>
+                    <h2 style="font-size:1.4rem; font-weight:700; color:#f8fafc; margin:0 0 6px 0;">SOC Operator Login</h2>
+                    <p style="font-size:0.85rem; color:#94a3b8; margin:0;">Enter credentials to access command console</p>
                 </div>
 
-                <div class="form-group">
-                    <label class="form-label" for="password">Password</label>
-                    <input
-                        type="password"
-                        id="password"
-                        class="form-input"
-                        placeholder="Enter password"
-                        autocomplete="current-password"
-                        required
-                    >
+                <div id="loginError" class="login-error" style="display:none; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); color:#fca5a5; padding:10px 14px; border-radius:8px; font-size:0.82rem; margin-bottom:18px;"></div>
+
+                <form id="loginForm">
+                    <div class="form-group" style="margin-bottom:18px;">
+                        <label class="form-label" for="username" style="display:block; font-size:0.8rem; font-weight:600; color:#cbd5e1; margin-bottom:6px;">Username or Email</label>
+                        <input
+                            type="text"
+                            id="username"
+                            class="form-input"
+                            placeholder="e.g. admin"
+                            autocomplete="username"
+                            style="width:100%; background:#020617; border:1px solid #334155; color:#fff; padding:10px 14px; border-radius:8px; font-size:0.9rem;"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group" style="margin-bottom:18px;">
+                        <label class="form-label" for="password" style="display:block; font-size:0.8rem; font-weight:600; color:#cbd5e1; margin-bottom:6px;">Password</label>
+                        <div class="password-wrapper" style="position:relative;">
+                            <input
+                                type="password"
+                                id="password"
+                                class="form-input"
+                                placeholder="••••••••••••"
+                                autocomplete="current-password"
+                                style="width:100%; background:#020617; border:1px solid #334155; color:#fff; padding:10px 42px 10px 14px; border-radius:8px; font-size:0.9rem;"
+                                required
+                            >
+                            <button type="button" class="password-toggle" id="togglePassword" title="Show password" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:#94a3b8; cursor:pointer; font-size:1rem;">👁</button>
+                        </div>
+                    </div>
+
+                    <div class="form-row" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
+                        <label class="remember-label" style="display:flex; align-items:center; gap:8px; font-size:0.82rem; color:#94a3b8; cursor:pointer;">
+                            <input type="checkbox" id="rememberMe" style="accent-color:#38bdf8;">
+                            <span>Remember operator handle</span>
+                        </label>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary login-btn" id="loginBtn" style="width:100%; padding:12px; font-size:0.95rem; font-weight:600; justify-content:center;">
+                        Sign In to Console
+                    </button>
+                </form>
+
+                <div class="login-security-note" style="margin-top:20px; text-align:center; font-size:0.75rem; color:#64748b;">
+                    🔒 Authenticated Session · Role: SOC Administrator<br>
+                    Default Credentials: <code style="color:#cbd5e1;">admin / admin123</code>
                 </div>
-
-                <button type="submit" class="btn btn-primary login-btn" id="loginBtn">
-                    Sign In
-                </button>
-            </form>
-
-            <p style="text-align:center; margin-top:20px; font-size:0.75rem; color:var(--text-muted);">
-                Default credentials: admin / admin123
-            </p>
+            </div>
         </div>
     </div>
 
+    <script src="/static/js/common.js"></script>
     <script src="/static/js/auth.js"></script>
 </body>
 </html>

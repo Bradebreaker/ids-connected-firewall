@@ -3,57 +3,84 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="IDS-Connected Firewall — Real-time security monitoring dashboard">
-    <title>Dashboard — IDS Firewall</title>
+    <meta name="description" content="IDS-Connected Firewall — Real-time Security Operations Center (SOC) dashboard">
+    <title>SOC Command Center — IDS Firewall</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/dashboard.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        .stat-card.clickable {
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .stat-card.clickable:hover {
+            transform: translateY(-3px);
+            border-color: rgba(56, 189, 248, 0.4);
+            box-shadow: 0 10px 25px -5px rgba(56, 189, 248, 0.2);
+        }
+        .stat-card .drilldown-hint {
+            color: #38bdf8;
+            font-size: 0.72rem;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+        .stat-card.clickable:hover .drilldown-hint {
+            opacity: 1;
+            text-decoration: underline;
+        }
+        .auto-refresh-box {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+        .auto-refresh-select {
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: #f8fafc;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 0.75rem;
+        }
+    </style>
 </head>
 <body>
     <div class="dashboard-layout">
-        <!-- ── Sidebar ──────────────────────────────────────────── -->
-        <aside class="sidebar" id="sidebar">
-            <div class="sidebar-brand">
-                <div class="brand-icon">🛡️</div>
-                <div>
-                    <h1>IDS Firewall</h1>
-                    <span class="version">v1.0.0</span>
-                </div>
-            </div>
-
-            <nav class="sidebar-nav">
-                <div class="nav-section-title">Monitoring</div>
-                <a href="/" class="nav-link active" id="navDashboard">
-                    <span class="nav-icon">📊</span>
-                    <span>Dashboard</span>
-                </a>
-                <a href="/blocked" class="nav-link" id="navBlocked">
-                    <span class="nav-icon">🚫</span>
-                    <span>Blocked IPs</span>
-                    <span class="nav-badge" id="blockedCount" style="display:none">0</span>
-                </a>
-
-                <div class="nav-section-title">Management</div>
-                <a href="/rules" class="nav-link" id="navRules">
-                    <span class="nav-icon">📋</span>
-                    <span>Firewall Rules</span>
-                </a>
-            </nav>
-
-            <div class="sidebar-footer">
-                <button class="logout-btn" id="logoutBtn" onclick="logout()">
-                    <span>🚪</span>
-                    <span>Log Out</span>
-                </button>
-            </div>
-        </aside>
+        <!-- ── Global SOC Sidebar Navigation ─────────────────────── -->
+        <aside class="sidebar" id="sidebar"></aside>
 
         <!-- ── Header ───────────────────────────────────────────── -->
         <header class="header">
             <div class="header-left">
-                <button class="mobile-menu-btn" id="menuBtn" onclick="toggleSidebar()">☰</button>
-                <h2 class="header-title">Security Dashboard</h2>
+                <button class="mobile-menu-btn" id="menuBtn" onclick="document.getElementById('sidebar').classList.toggle('mobile-open')">☰</button>
+                <h2 class="header-title">SOC Command Center</h2>
             </div>
             <div class="header-right">
+                <div class="auto-refresh-box">
+                    <span>Auto:</span>
+                    <select id="autoRefreshSelect" class="auto-refresh-select" onchange="toggleAutoRefresh(this.value)">
+                        <option value="30" selected>30s</option>
+                        <option value="15">15s</option>
+                        <option value="60">60s</option>
+                        <option value="0">Off</option>
+                    </select>
+                </div>
+                <span class="last-updated" id="lastUpdated">Last updated: —</span>
+                <button class="header-btn" id="refreshBtn" onclick="refreshDashboard()" title="Synchronize state with server">
+                    <span id="refreshBtnIcon">🔄</span> <span id="refreshBtnText">Refresh</span>
+                </button>
+                <a href="/reports.html" class="header-btn" title="View full security reporting center" style="text-decoration:none;">📄 Reports</a>
+                <button class="header-btn" id="resetDataBtn" onclick="openResetDatabaseModal()" title="Purge demonstration alerts & temporary blocks" style="border-color: rgba(239, 68, 68, 0.4); color: #fca5a5; background: rgba(239, 68, 68, 0.08);">
+                    <span>↻</span> <span>Reset Data</span>
+                </button>
                 <div class="connection-status">
                     <span class="connection-dot" id="wsDot"></span>
                     <span id="wsStatus">Connecting…</span>
@@ -67,62 +94,150 @@
 
         <!-- ── Main Content ─────────────────────────────────────── -->
         <main class="main-content">
-            <!-- Stats Row -->
+
+            <!-- ── Drill-Down KPI Cards (Phase 4) ──────────────────── -->
             <div class="stats-grid">
-                <div class="stat-card">
+                <!-- 1. Total Alerts -->
+                <div class="stat-card glass-panel clickable" onclick="window.location.href='/alerts.html?filter=all'" title="Click to view all security alerts">
                     <div class="stat-header">
                         <span class="stat-label">Total Alerts</span>
                         <span class="stat-icon">🔔</span>
                     </div>
                     <div class="stat-value" id="statTotalAlerts">0</div>
-                    <div class="stat-subtitle">All time</div>
+                    <div class="stat-subtitle" style="display:flex; justify-content:space-between; align-items:center;">
+                        <span>All time recorded</span>
+                        <span class="drilldown-hint">View all alerts →</span>
+                    </div>
                 </div>
-                <div class="stat-card">
+
+                <!-- 2. Today's Alerts -->
+                <div class="stat-card glass-panel clickable" onclick="window.location.href='/alerts.html?filter=today'" title="Click to view alerts from today">
                     <div class="stat-header">
                         <span class="stat-label">Today's Alerts</span>
                         <span class="stat-icon">📅</span>
                     </div>
                     <div class="stat-value" id="statTodayAlerts">0</div>
-                    <div class="stat-subtitle">Since midnight UTC</div>
+                    <div class="stat-subtitle" style="display:flex; justify-content:space-between; align-items:center;">
+                        <span>Since midnight UTC</span>
+                        <span class="drilldown-hint">View today's alerts →</span>
+                    </div>
                 </div>
-                <div class="stat-card">
+
+                <!-- 3. Active Blocks -->
+                <div class="stat-card glass-panel clickable" onclick="window.location.href='/blocked-ips.html?filter=active'" title="Click to view quarantined hosts">
                     <div class="stat-header">
                         <span class="stat-label">Active Blocks</span>
                         <span class="stat-icon">🛑</span>
                     </div>
                     <div class="stat-value" id="statActiveBlocks">0</div>
-                    <div class="stat-subtitle">IPs currently blocked</div>
+                    <div class="stat-subtitle" style="display:flex; justify-content:space-between; align-items:center;">
+                        <span>Quarantined IPs</span>
+                        <span class="drilldown-hint">Manage blocks →</span>
+                    </div>
                 </div>
-                <div class="stat-card">
+
+                <!-- 4. Top Attacker -->
+                <div class="stat-card glass-panel clickable" id="cardTopAttacker" onclick="drilldownTopAttacker()" title="Click to filter alerts by top offending IP">
                     <div class="stat-header">
                         <span class="stat-label">Top Attacker</span>
                         <span class="stat-icon">⚠️</span>
                     </div>
-                    <div class="stat-value text-mono" id="statTopAttacker" style="font-size:1.1rem">—</div>
-                    <div class="stat-subtitle">Most alerts from</div>
+                    <div class="stat-value text-mono" id="statTopAttacker" style="font-size:1.15rem; color:#f87171;">—</div>
+                    <div class="stat-subtitle" style="display:flex; justify-content:space-between; align-items:center;">
+                        <span>Most alerts from</span>
+                        <span class="drilldown-hint">Inspect attacker →</span>
+                    </div>
                 </div>
             </div>
 
-            <!-- Panels Row: Alert Feed + Chart -->
+            <!-- ── Synthetic Traffic Generator Panel ────────────────── -->
+            <div class="panel glass-panel" style="margin-bottom: 24px;">
+                <div class="panel-header">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span class="panel-title">⚡ Synthetic Traffic Generator</span>
+                        <span class="badge" style="background:#0c4a6e; color:#38bdf8; border:1px solid #0284c7;">Real Pipeline Injection</span>
+                    </div>
+                    <span class="text-muted" style="font-size:0.75rem">Injects genuine packet structures through Scapy parser & IDS detectors</span>
+                </div>
+                <div class="panel-body">
+                    <div class="generator-row" style="display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
+                        <button class="btn btn-secondary" onclick="generateTraffic('normal')" style="font-size:0.85rem;">
+                            <span>🟢 Generate Normal Traffic</span>
+                        </button>
+                        <button class="btn btn-primary" onclick="generateTraffic('burst')" style="font-size:0.85rem;">
+                            <span>🎲 Random Attack Burst</span>
+                        </button>
+
+                        <div style="display:flex; gap:8px; align-items:center; border-left: 1px solid rgba(255,255,255,0.1); padding-left:14px; margin-left:6px; flex-wrap:wrap;">
+                            <label style="font-size:0.8rem; color:#94a3b8; font-weight:500;">Specific Vector:</label>
+                            <select id="attackTypeSelect" class="input-field" style="width: auto; background:#0f172a; color:#f8fafc; border:1px solid #334155; font-size:0.85rem; padding:8px 12px; border-radius:6px;">
+                                <optgroup label="Reconnaissance & Volumetric">
+                                    <option value="port_scan">Port Scan Reconnaissance</option>
+                                    <option value="brute_force">Brute Force Authentication</option>
+                                    <option value="syn_flood">TCP SYN Flood DoS</option>
+                                    <option value="slowloris">Slowloris Low-and-Slow DoS</option>
+                                    <option value="udp_flood">UDP Flood Volumetric DoS</option>
+                                    <option value="icmp_flood">ICMP Echo Flood (Ping)</option>
+                                </optgroup>
+                                <optgroup label="Web Application & Injections">
+                                    <option value="sql_injection">SQL Injection (SQLi)</option>
+                                    <option value="xss">Cross-Site Scripting (XSS)</option>
+                                    <option value="path_traversal">Path Traversal (../)</option>
+                                    <option value="command_injection">OS Command Injection</option>
+                                    <option value="ldap_injection">LDAP Filter Injection</option>
+                                    <option value="xxe">XML External Entity (XXE)</option>
+                                    <option value="ssti">Template Injection (SSTI)</option>
+                                </optgroup>
+                                <optgroup label="Server & Remote Execution">
+                                    <option value="log4shell">Log4Shell (CVE-2021-44228)</option>
+                                    <option value="php_rce">PHP Code Execution / RCE</option>
+                                    <option value="shellshock">Shellshock (CVE-2014-6271)</option>
+                                    <option value="insecure_deserialization">Insecure Deserialization</option>
+                                </optgroup>
+                                <optgroup label="Modern Protocol & API Threats">
+                                    <option value="cloud_ssrf">Cloud Metadata SSRF</option>
+                                    <option value="http_request_smuggling">HTTP Request Smuggling</option>
+                                    <option value="api_abuse">API Abuse & BOLA</option>
+                                    <option value="credential_stuffing">Credential Stuffing</option>
+                                    <option value="jwt_attack">JWT / Auth Token Abuse</option>
+                                    <option value="dns_tunneling">DNS Tunneling Exfiltration</option>
+                                </optgroup>
+                            </select>
+                            <button class="btn btn-secondary" onclick="generateSpecificTraffic()" style="font-size:0.85rem;">
+                                <span>▶ Inject Vector</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="generator-output" id="generatorOutput" style="margin-top:12px; font-size:0.82rem; color:#94a3b8; font-family:monospace; background:#020617; padding:10px 14px; border-radius:6px; border:1px solid #1e293b;">
+                        Ready to generate synthetic traffic flows...
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Panels Grid: Live Alert Feed + Attack Timeline ────── -->
             <div class="panels-grid">
                 <!-- Live Alert Feed -->
-                <div class="panel">
+                <div class="panel glass-panel">
                     <div class="panel-header">
-                        <span class="panel-title">🔴 Live Alert Feed</span>
-                        <span class="text-muted" style="font-size:0.75rem" id="alertCountLabel">0 alerts</span>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span class="live-dot"></span>
+                            <span class="panel-title">🔴 Real-Time Alert Feed</span>
+                        </div>
+                        <a href="/alerts.html" class="text-muted" style="font-size:0.75rem; text-decoration:none; color:#38bdf8;" id="alertCountLabel">0 alerts recorded →</a>
                     </div>
                     <div class="panel-body" id="alertFeed">
                         <div class="empty-state">
-                            <div class="empty-icon">🛡️</div>
+                            <div class="empty-state-icon">🛡️</div>
                             <p>No alerts yet — monitoring active</p>
+                            <button class="btn btn-primary" onclick="generateTraffic('burst')">Simulate Traffic</button>
                         </div>
                     </div>
                 </div>
 
                 <!-- Attack Chart -->
-                <div class="panel">
+                <div class="panel glass-panel">
                     <div class="panel-header">
-                        <span class="panel-title">📈 Attacks Over Time (24h)</span>
+                        <span class="panel-title">📈 Attacks Over Time (24h Window)</span>
                     </div>
                     <div class="chart-container">
                         <canvas id="attackChart"></canvas>
@@ -130,9 +245,39 @@
                 </div>
             </div>
 
-            <!-- Severity Breakdown -->
+            <!-- ── Live Packet Stream Preview (Links to /traffic.html) ── -->
+            <div class="panel glass-panel" style="margin-bottom: 24px;">
+                <div class="panel-header">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span class="live-dot" style="background:#22d3ee;"></span>
+                        <span class="panel-title">📡 Live Packet Stream</span>
+                        <span class="text-muted" style="font-size:0.75rem" id="trafficCountLabel">0 packets</span>
+                    </div>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <a href="/traffic.html" class="btn btn-ghost" style="font-size:0.8rem; padding:4px 10px; color:#38bdf8; border:1px solid rgba(56,189,248,0.3);">
+                            🔍 Open Wireshark Analyzer →
+                        </a>
+                        <button class="stream-btn" id="pauseStreamBtn" onclick="togglePause()">⏸ Pause</button>
+                        <button class="stream-btn" id="clearStreamBtn" onclick="clearStream()">🗑 Clear</button>
+                    </div>
+                </div>
+                <div class="traffic-header-row">
+                    <span class="pkt-time">TIME</span>
+                    <span class="pkt-src">SOURCE</span>
+                    <span class="pkt-arrow"></span>
+                    <span class="pkt-dst">DESTINATION</span>
+                    <span class="pkt-proto">PROTO</span>
+                    <span class="pkt-flags">FLAGS</span>
+                    <span class="pkt-size">SIZE</span>
+                </div>
+                <div class="panel-body traffic-stream" id="trafficFeed">
+                    <!-- Traffic items populate here via JS -->
+                </div>
+            </div>
+
+            <!-- ── Severity & Type Breakdown Charts ─────────────────── -->
             <div class="panels-grid">
-                <div class="panel">
+                <div class="panel glass-panel">
                     <div class="panel-header">
                         <span class="panel-title">📊 Alerts by Severity</span>
                     </div>
@@ -140,9 +285,9 @@
                         <canvas id="severityChart"></canvas>
                     </div>
                 </div>
-                <div class="panel">
+                <div class="panel-body glass-panel" style="padding:0; overflow:hidden;">
                     <div class="panel-header">
-                        <span class="panel-title">🔍 Alerts by Type</span>
+                        <span class="panel-title">🔍 Attack Categories Distribution</span>
                     </div>
                     <div class="chart-container" style="height:260px;">
                         <canvas id="typeChart"></canvas>
@@ -152,6 +297,126 @@
         </main>
     </div>
 
+    <!-- ── Details Modal ────────────────────────────────────────── -->
+    <div id="detailsModal" class="modal-overlay">
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h2 id="modalTitle">Incident Details</h2>
+                <button class="modal-close" onclick="closeDetailsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-grid">
+                    <div class="modal-field">
+                        <span class="modal-label">Source IP</span>
+                        <span class="modal-value cyan" id="modalSourceIp">—</span>
+                    </div>
+                    <div class="modal-field">
+                        <span class="modal-label">Destination IP</span>
+                        <span class="modal-value" id="modalDestIp">—</span>
+                    </div>
+                    <div class="modal-field">
+                        <span class="modal-label">Destination Port</span>
+                        <span class="modal-value" id="modalDestPort">—</span>
+                    </div>
+                    <div class="modal-field">
+                        <span class="modal-label">Protocol</span>
+                        <span class="modal-value" id="modalProtocol">—</span>
+                    </div>
+                    <div class="modal-field">
+                        <span class="modal-label">Attack Type</span>
+                        <span class="modal-value" id="modalAlertType">—</span>
+                    </div>
+                    <div class="modal-field">
+                        <span class="modal-label">Severity</span>
+                        <span class="modal-value" id="modalSeverity">—</span>
+                    </div>
+                    <div class="modal-field">
+                        <span class="modal-label">Timestamp</span>
+                        <span class="modal-value" id="modalTime">—</span>
+                    </div>
+                    <div class="modal-field">
+                        <span class="modal-label">Auto-Blocked?</span>
+                        <span class="modal-value" id="modalBlocked">—</span>
+                    </div>
+                </div>
+                <div class="modal-section">
+                    <span class="modal-label">Detection Reason / Description</span>
+                    <div class="modal-desc" id="modalDescription">—</div>
+                </div>
+                <div class="modal-section">
+                    <span class="modal-label">Raw Payload / Packet Data</span>
+                    <pre class="modal-payload" id="modalPayload"></pre>
+                </div>
+            </div>
+            <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center;">
+                <a id="modalAttackIntelLink" href="/attack-intelligence.html" class="btn btn-ghost" style="color:#38bdf8; font-size:0.85rem;">
+                    ⚔️ View Attack Intelligence Page →
+                </a>
+                <button class="btn btn-secondary" onclick="closeDetailsModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── System & Database Reset Confirmation Modal ────────────── -->
+    <div class="modal-backdrop" id="resetDbModalBackdrop" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); backdrop-filter:blur(5px); z-index:100000; align-items:center; justify-content:center;">
+        <div class="modal-card" style="background:#0f172a; border:1px solid rgba(239,68,68,0.4); border-radius:12px; padding:24px; max-width:540px; width:92%; box-shadow:0 25px 50px -12px rgba(0,0,0,0.85);">
+            <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+                <div style="font-size:1.8rem; color:#ef4444; background:rgba(239,68,68,0.1); width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:8px;">↻</div>
+                <div>
+                    <h3 style="margin:0; font-size:1.15rem; color:#f8fafc;">Reset System & Database Data</h3>
+                    <div style="font-size:0.78rem; color:#94a3b8; margin-top:2px;">Purge Demonstration State & Reclaim SQLite Storage</div>
+                </div>
+            </div>
+
+            <p style="font-size:0.86rem; color:#cbd5e1; line-height:1.6; margin-bottom:14px;">
+                This action purges demonstration security events, temporary auto-blocked IPs, and rolling packet buffers, then truncates and vacuums the SQLite database to defragment storage and prevent lockups.
+            </p>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:16px;">
+                <!-- Preserved Card -->
+                <div style="background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.3); border-radius:8px; padding:10px 12px; font-size:0.78rem; line-height:1.5;">
+                    <div style="color:#34d399; font-weight:700; display:flex; align-items:center; gap:5px; margin-bottom:4px;">
+                        <span>🛡️</span> PRESERVED
+                    </div>
+                    <div style="color:#e2e8f0;">• Admin Accounts & Passwords</div>
+                    <div style="color:#e2e8f0;">• IP Whitelist (localhost)</div>
+                    <div style="color:#e2e8f0;">• Permanent Firewall Rules</div>
+                    <div style="color:#e2e8f0;">• Permanent Blocked IPs</div>
+                </div>
+
+                <!-- Purged Card -->
+                <div style="background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px 12px; font-size:0.78rem; line-height:1.5;">
+                    <div style="color:#f87171; font-weight:700; display:flex; align-items:center; gap:5px; margin-bottom:4px;">
+                        <span>⚠️</span> PURGED
+                    </div>
+                    <div style="color:#cbd5e1;">• Demonstration Alerts</div>
+                    <div style="color:#cbd5e1;">• Temporary Auto-Blocks</div>
+                    <div style="color:#cbd5e1;">• Temporary Firewall Rules</div>
+                    <div style="color:#cbd5e1;">• Live Packet Rolling Buffer</div>
+                </div>
+            </div>
+
+            <div style="margin-bottom:18px;">
+                <label style="display:block; font-size:0.8rem; color:#94a3b8; margin-bottom:6px;">
+                    Type <strong style="color:#f87171; font-family:monospace; background:rgba(239,68,68,0.15); padding:1px 6px; border-radius:4px;">RESET</strong> to enable confirmation:
+                </label>
+                <input type="text" id="resetConfirmInput" class="input-field" placeholder="Type RESET to confirm" oninput="validateResetInput(this.value)" style="width:100%; box-sizing:border-box; background:#020617; border:1px solid #334155; color:#f8fafc; padding:8px 12px; border-radius:6px; font-family:monospace; font-size:0.9rem;">
+            </div>
+
+            <div id="resetFeedback" style="display:none; font-size:0.8rem; margin-bottom:14px; padding:8px 12px; border-radius:6px;"></div>
+
+            <div style="display:flex; justify-content:flex-end; gap:12px; align-items:center;">
+                <button class="btn btn-secondary" id="btnCancelDbReset" onclick="closeResetDatabaseModal()" style="padding:8px 18px;">Cancel</button>
+                <button class="btn btn-danger" id="btnConfirmDbReset" onclick="executeDatabaseReset()" disabled style="padding:8px 20px; background:#dc2626; color:#fff; font-weight:600; opacity:0.4; cursor:not-allowed; display:flex; align-items:center; gap:8px; border-radius:6px;">
+                    <span id="btnResetSpinner" style="display:none;">⏳</span>
+                    <span id="btnResetText">Confirm Reset</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/common.js"></script>
+    <script src="/static/js/nav.js"></script>
     <script src="/static/js/app.js"></script>
 </body>
 </html>

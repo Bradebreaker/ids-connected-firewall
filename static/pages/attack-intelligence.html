@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attack Intelligence Center — IDS Firewall</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <style>
+        .attack-category-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #f8fafc;
+            margin: 28px 0 14px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            padding-bottom: 8px;
+        }
+        .attack-grid-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+            gap: 16px;
+        }
+        .intel-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .intel-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--cyan);
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5), 0 0 15px rgba(34,211,238,0.15);
+        }
+        .intel-icon { font-size: 1.8rem; margin-bottom: 10px; }
+        .intel-name { font-size: 1.05rem; font-weight: 700; color: #fff; margin: 0 0 6px 0; }
+        .intel-desc { font-size: 0.83rem; color: #94a3b8; line-height: 1.5; margin-bottom: 14px; flex-grow: 1; }
+        .intel-footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 12px; }
+        .intel-count { font-size: 0.78rem; font-family: 'JetBrains Mono', monospace; color: #38bdf8; }
+    </style>
+</head>
+<body>
+    <div class="dashboard-layout">
+        <!-- ── Sidebar ──────────────────────────────────────────── -->
+        <aside class="sidebar" id="sidebar"></aside>
+
+        <!-- ── Header ───────────────────────────────────────────── -->
+        <header class="header">
+            <div class="header-left">
+                <button class="mobile-menu-btn" onclick="document.getElementById('sidebar').classList.toggle('mobile-open')">☰</button>
+                <h2 class="header-title">⚔️ Attack Intelligence Center</h2>
+            </div>
+            <div class="header-right">
+                <div class="connection-status">
+                    <span class="connection-dot" id="wsDot"></span>
+                    <span id="wsStatus">CONNECTING</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- ── Main Content ─────────────────────────────────────── -->
+        <main class="main-content">
+            <div class="page-header" style="margin-bottom:20px;">
+                <h1>Threat Intelligence Library</h1>
+                <p>Comprehensive technical taxonomy of all 23 attack vectors monitored by the detection engines, featuring algorithmic detection logic, network signatures, and safe simulation tools.</p>
+            </div>
+
+            <!-- Category 1: Reconnaissance -->
+            <div class="attack-category-title"><span>🔍</span> Network Reconnaissance & Probing</div>
+            <div class="attack-grid-row">
+                <div class="intel-card" onclick="window.location.href='/attacks/port-scan.html'">
+                    <div>
+                        <div class="intel-icon">🔍</div>
+                        <h3 class="intel-name">Port Scan</h3>
+                        <div class="intel-desc">Probing multiple target ports using TCP SYN packets to discover active network services. Tracked via sliding time-window destination port diversity.</div>
+                    </div>
+                    <div class="intel-footer">
+                        <span class="badge badge-medium">MEDIUM</span>
+                        <span class="intel-count" id="cnt-port_scan">0 Detections</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Category 2: Denial of Service -->
+            <div class="attack-category-title"><span>🌊</span> Volumetric & Denial of Service (DoS)</div>
+            <div class="attack-grid-row">
+                <div class="intel-card" onclick="window.location.href='/attacks/syn-flood.html'">
+                    <div>
+                        <div class="intel-icon">🌊</div>
+                        <h3 class="intel-name">SYN Flood (DoS)</h3>
+                        <div class="intel-desc">High-rate TCP SYN half-open connection flood exhausting firewall state tables. Detected via statistical standard deviation anomaly analysis.</div>
+                    </div>
+                    <div class="intel-footer">
+                        <span class="badge badge-high">HIGH</span>
+                        <span class="intel-count" id="cnt-syn_flood">0 Detections</span>
+                    </div>
+                </div>
+                <div class="intel-card" onclick="window.location.href='/attacks/udp-flood.html'">
+                    <div>
+                        <div class="intel-icon">⚡</div>
+                        <h3 class="intel-name">UDP Flood</h3>
+                        <div class="intel-desc">Volumetric UDP datagram burst overwhelming target bandwidth and socket buffers. Monitored through sliding-window rate tracking.</div>
+                    </div>
+                    <div class="intel-footer">
+                        <span class="badge badge-high">HIGH</span>
+                        <span class="intel-count" id="cnt-udp_flood">0 Detections</span>
+                    </div>
+                </div>
+                <div class="intel-card" onclick="window.location.href='/attacks/icmp-flood.html'">
+                    <div>
+                        <div class="intel-icon">📡</div>
+                        <h3 class="intel-name">ICMP Echo Flood</h3>
+                        <div class="intel-desc">Ping sweep / Echo Request volumetric flood saturating ICMP handling. Detected via per-source sliding window thresholds.</div>
+                    </div>
+                    <div class="intel-footer">
+                        <span class="badge badge-high">HIGH</span>
+                        <span class="intel-count" id="cnt-icmp_flood">0 Detections</span>
+                    </div>
+                </div>
+                <div class="intel-card" onclick="window.location.href='/attacks/slowloris.html'">
+                    <div>
+                        <div class="intel-icon">🐢</div>
+                        <h3 class="intel-name">Slowloris (Slow HTTP)</h3>
+                        <div class="intel-desc">Low-bandwidth application DoS that holds web server worker threads open with slow, incomplete HTTP headers.</div>
+                    </div>
+                    <div class="intel-footer">
+                        <span class="badge badge-medium">MEDIUM</span>
+                        <span class="intel-count" id="cnt-slowloris">0 Detections</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Category 3: Authentication & Identity -->
+            <div class="attack-category-title"><span>🔑</span> Authentication & Access Abuse</div>
+            <div class="attack-grid-row">
+                <div class="intel-card" onclick="window.location.href='/attacks/brute-force.html'">
+                    <div>
+                        <div class="intel-icon">🔑</div>
+                        <h3 class="intel-name">Brute Force</h3>
+                        <div class="intel-desc">Rapid automated credential guessing against sensitive administrative ports (SSH, Telnet, FTP). Rate-tracked per destination port.</div>
+                    </div>
+                    <div class="intel-footer">
+                        <span class="badge badge-medium">MEDIUM</span>
+                        <span class="intel-count" id="cnt-brute_force">0 Detections</span>
+                    </div>
+                </div>
+                <div class="intel-card" onclick="window.location.href='/attacks/credential-stuffing.html'">
+                    <div>
+                        <div class="intel-icon">🗃️</div>
+                        <h3 class="intel-name">Credential Stuffing</h3>
+                        <div class="intel-desc">Automated login attempts using compromised username/password dictionaries across authentication endpoints.</div>
+                    </div>
+                    <div class="intel-footer">
+                        <span class="badge badge-high">HIGH</span>
+                        <span class="intel-count" id="cnt-credential_stuffing">0 Detections</span>
+                    </div>
+                </div>
+                <div class="intel-card" onclick="window.location.href='/attacks/jwt-attack.html'">
+                    <div>
+                        <div class="intel-icon">🎟️</div>
+                        <h3 class="intel-name">JWT / Auth Bypass</h3>
+                        <div class="intel-desc">Tampered JSON Web Tokens exploiting algorithm confusion ('alg': 'none') or forged claims to bypass authorization controls.</div>
+                    </div>
+                    <div class="intel-footer">
+                        <span class="badge badge-high">HIGH</span>
+                        <span class="intel-count" id="cnt-jwt_attack">0 Detections</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Category 4: Injection & Code Execution -->
+            <div class="attack-category-title"><span>💉</span> Injection & Remote Code Execution</div>
+            <div class="attack-grid-row">
+                <div class="intel-card" onclick="window.location.href='/attacks/sql-injection.html'">
+                    <div>
+                        <div class="intel-icon">💉</div>
+                        <h3 class="intel-name">SQL Injection</h3>
+                        <div class="intel-desc">Injection of SQL metacharacters (UNION SELECT, OR 1=1) to manipulate backend database queries and extract data.</div>
+                    </div>
+                    <div class="intel-footer">
+                        <span class="badge badge-high">HIGH</span>
+                        <span class="intel-count" id="cnt-sql_injection">0 Detections</span>
+                    </div>
+                </div>
+                <div class="intel-card" onclick="window.location.href='/attacks/command-injection.html'">
+                    <div>
+                        <div class="intel-icon">💻</div>
+                        <h3 class="intel-name">Command Injection</h3>
+                        <div class="intel-desc">Shell metacharacters (; | & `) injected into input parameters to execute arbitrary system binaries on the host OS.</div>
+                    </div>
+                    <div class="intel-footer">
+                        <span class="badge badge-high">HIGH</span>
+                        <span class="intel-count" id="cnt-command_injection">0 Detections</span>
+                    </div>
+                </div>
+                <div class="intel-card" onclick="window.location.href='/attacks/ldap-injection.html'">
+                    <div>
+                        <div class="intel-icon">👥</div>
+                        <h3 class="intel-name">LDAP Injection</h3>
+                        <div class="intel-desc">Malicious LDAP search filter queries constructed using wildcards and logical operators to bypass directory authorization.</div>
+                    </div>
+                    <div class="intel-footer">
+                        <span class="badge badge-high">HIGH</span>
+                        <span class="intel-count" id="cnt-ldap_injection">0 Detections</span>
+                    </div>
+                </div>
+                <div class="intel-card" onclick="window.location.href='/attacks/xxe.html'">
+                    <div>
+                        <div class="intel-icon">📄</div>
+                        <h3 class="intel-name">XML External Entity (XXE)</h3>
+                        <div class="intel-desc">Exploitation of vulnerable XML parsers using SYSTEM external entity declarations to read local files or trigger SSRF.</div>
+                    </div>
+                    <div class="intel-footer">
+                        <span class="badge badge-high">HIGH</span>
+                        <span class="intel-count" id="cnt-xxe">0 Detections</span>
+                    </div>
+                </div>
+                <div class="intel-card" onclick="window.location.href='/attacks/ssti.html'">
+                    <div>
+                        <div class="intel-icon">🧩</div>
+                        <h3 class="intel-name">Template Injection (SSTI)</h3>
+                        <div class="intel-desc">Server-Side Template Injection syntax ({{7*7}}, ${...}) executing arbitrary server code via template engines.</div>
+                    </div>
+                    <div class="intel-footer">
+                        <span class="badge badge-high">HIGH</span>
+                        <span class="intel-count" id="cnt-ssti">0 Detections</span>
+                    </div>
+                </div>
+                <div class="intel-card" onclick="window.location.href='/attacks/insecure-deserialization.html'">
+                    <div>
+                        <div class="intel-icon">📦</div>
+                        <h3 class="intel-name">Insecure Deserialization</h3>
+                        <div class="intel-desc">Malicious serialized objects (Java magic rO0AB, Python pickle, PHP serialize) abusing gadget chains for remote execution.</div>
+                    </div>
+                    <div class="intel-footer">
+                        <span class="badge badge-high">HIGH</span>
+                        <span class="intel-count" id="cnt-insecure_deserialization">0 Detections</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Category 5: Web & Modern App Vulnerabilities -->
+            <div class="attack-category-title"><span>🛡️</span> Web & Modern Application Threats</div>
+            <div class="attack-grid-row">
+                <div class="intel-card" onclick="window.location.href='/attacks/xss.html'">
+                    <div>
+                        <div class="intel-icon">📜</div>
+                        <h3 class="intel-name">Cross-Site Scripting (XSS)</h3>
+                        <div class="intel-desc">Injection of malicious JavaScript tags or DOM event handlers targeting client-side browser sessions.</div>
+                    </div>
+                    <div class="intel-footer">
+                        <span class="badge badge-high">HIGH</span>
+                        <span class="intel-count" id="cnt-xss">0 Detections</span>
+                    </div>
+                </div>
+                <div class="intel-card" onclick="window.location.href='/attacks/log4shell.html'">
+                    <div>
+                        <div class="intel-icon">🪵</div>
+                        <h3 class="intel-name">Log4Shell (CVE-2021-44228)</h3>
+                        <div class="intel-desc">JNDI LDAP/RMI lookup expressions injected into HTTP headers triggering remote Java code execution.</div>
+                    </div>
+                    <div class="intel-footer">
+                        <span class="badge badge-high">HIGH</span>
+                        <span class="intel-count" id="cnt-log4shell">0 Detections</span>
+                    </div>
+                </div>
+                <div class="intel-card" onclick="window.location.href='/attacks/cloud-ssrf.html'">
+                    <div>
+                        <div class="intel-icon">☁️</div>
+                        <h3 class="intel-name">Cloud SSRF</h3>
+                        <div class="intel-desc">Server-Side Request Forgery targeting link-local metadata endpoints (169.254.169.254) to compromise IAM cloud tokens.</div>
+                    </div>
+                    <div class="intel-footer">
+                        <span class="badge badge-high">HIGH</span>
+                        <span class="intel-count" id="cnt-cloud_ssrf">0 Detections</span>
+                    </div>
+                </div>
+                <div class="intel-card" onclick="window.location.href='/attacks/path-traversal.html'">
+                    <div>
+                        <div class="intel-icon">📂</div>
+                        <h3 class="intel-name">Path Traversal</h3>
+                        <div class="intel-desc">Dot-dot-slash sequence exploitation attempting to escape web root directories and access /etc/passwd or system configurations.</div>
+                    </div>
+                    <div class="intel-footer">
+                        <span class="badge badge-high">HIGH</span>
+                        <span class="intel-count" id="cnt-path_traversal">0 Detections</span>
+                    </div>
+                </div>
+                <div class="intel-card" onclick="window.location.href='/attacks/php-rce.html'">
+                    <div>
+                        <div class="intel-icon">🐘</div>
+                        <h3 class="intel-name">PHP RCE</h3>
+                        <div class="intel-desc">Direct injection of PHP system(), eval(), or backdoors through file uploads or dynamic evaluate calls.</div>
+                    </div>
+                    <div class="intel-footer">
+                        <span class="badge badge-high">HIGH</span>
+                        <span class="intel-count" id="cnt-php_rce">0 Detections</span>
+                    </div>
+                </div>
+                <div class="intel-card" onclick="window.location.href='/attacks/shellshock.html'">
+                    <div>
+                        <div class="intel-icon">🐚</div>
+                        <h3 class="intel-name">Shellshock (CVE-2014-6271)</h3>
+                        <div class="intel-desc">Trailing command execution in Bash environment variables exported across CGI web server environments.</div>
+                    </div>
+                    <div class="intel-footer">
+                        <span class="badge badge-high">HIGH</span>
+                        <span class="intel-count" id="cnt-shellshock">0 Detections</span>
+                    </div>
+                </div>
+                <div class="intel-card" onclick="window.location.href='/attacks/http-request-smuggling.html'">
+                    <div>
+                        <div class="intel-icon">📦</div>
+                        <h3 class="intel-name">HTTP Request Smuggling</h3>
+                        <div class="intel-desc">Desynchronization of proxy and backend servers using conflicting Content-Length and Transfer-Encoding headers.</div>
+                    </div>
+                    <div class="intel-footer">
+                        <span class="badge badge-high">HIGH</span>
+                        <span class="intel-count" id="cnt-http_request_smuggling">0 Detections</span>
+                    </div>
+                </div>
+                <div class="intel-card" onclick="window.location.href='/attacks/api-abuse.html'">
+                    <div>
+                        <div class="intel-icon">🔌</div>
+                        <h3 class="intel-name">API Abuse / BOLA</h3>
+                        <div class="intel-desc">Broken Object Level Authorization and unauthorized administrative schema dump queries across REST and GraphQL endpoints.</div>
+                    </div>
+                    <div class="intel-footer">
+                        <span class="badge badge-medium">MEDIUM</span>
+                        <span class="intel-count" id="cnt-api_abuse">0 Detections</span>
+                    </div>
+                </div>
+                <div class="intel-card" onclick="window.location.href='/attacks/dns-tunneling.html'">
+                    <div>
+                        <div class="intel-icon">🌐</div>
+                        <h3 class="intel-name">DNS Tunneling</h3>
+                        <div class="intel-desc">Data exfiltration and C2 beaconing encoded within high-entropy subdomains of recursive DNS query packets.</div>
+                    </div>
+                    <div class="intel-footer">
+                        <span class="badge badge-high">HIGH</span>
+                        <span class="intel-count" id="cnt-dns_tunneling">0 Detections</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Alerts Ledger -->
+            <div class="panel glass-panel" style="margin-top:30px; overflow-x:auto;">
+                <div class="panel-header">
+                    <span class="panel-title">📜 Recent Detections Across All Categories</span>
+                </div>
+                <table class="data-table" id="recentAlertsTable">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Attack Vector</th>
+                            <th>Severity</th>
+                            <th>Source IP</th>
+                            <th>Description</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recentAlertsBody">
+                        <tr><td colspan="6" style="text-align:center; padding:20px; color:#64748b;">Loading incident history...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+        </main>
+    </div>
+
+    <script src="/static/js/common.js"></script>
+    <script src="/static/js/nav.js"></script>
+    <script src="/static/js/attacks.js"></script>
+</body>
+</html>

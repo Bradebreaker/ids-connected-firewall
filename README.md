@@ -73,14 +73,31 @@ This is a genuinely functional security tool — it performs real packet analysi
 
 ## Quick Start
 
-### 1. Clone and install dependencies
+### 1. Clone the project
 
 ```bash
 cd /path/to/cn-project
+```
+
+### 2. Set up a virtual environment (Recommended)
+
+To avoid conflicts with system packages, create and activate a virtual environment:
+
+**On Linux:**
+```bash
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. (Optional) Configure settings
+**On Windows:**
+```powershell
+python -m venv venv
+.\venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+### 3. (Optional) Configure settings
 
 Copy and edit the environment file:
 
@@ -89,25 +106,19 @@ cp .env.example .env
 # Edit .env to set your management IP, JWT secret, etc.
 ```
 
-Or set environment variables:
+### 4. Run the application
 
+**On Linux (Requires Root for Sniffer & Firewall):**
 ```bash
-export MANAGEMENT_IP="192.168.1.100"    # Your SSH/management IP
-export JWT_SECRET_KEY="your-secret-key"
-export SNIFFER_INTERFACE="eth0"          # Network interface to monitor
+sudo venv/bin/python main.py
 ```
+*(Note: If you activate the venv and run `sudo python3 main.py`, sudo might use the system Python instead of the venv Python. Specifying the path `sudo venv/bin/python` ensures it uses the packages you just installed.)*
 
-### 3. Run the application
-
-```bash
-sudo python main.py
+**On Windows (Demo / Simulation Mode):**
+```powershell
+python main.py
 ```
-
-Or with uvicorn directly:
-
-```bash
-sudo uvicorn main:app --host 0.0.0.0 --port 8000
-```
+*(Note: Packet sniffing and iptables management will be automatically disabled, but the web dashboard and API will function fully.)*
 
 ### 4. Access the dashboard
 

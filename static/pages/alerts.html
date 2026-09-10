@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alerts Management & Investigation — IDS Firewall</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+    <div class="dashboard-layout">
+        <!-- ── Sidebar ──────────────────────────────────────────── -->
+        <aside class="sidebar" id="sidebar"></aside>
+
+        <!-- ── Header ───────────────────────────────────────────── -->
+        <header class="header">
+            <div class="header-left">
+                <button class="mobile-menu-btn" onclick="document.getElementById('sidebar').classList.toggle('mobile-open')">☰</button>
+                <h2 class="header-title">🔔 Total Alerts Management</h2>
+            </div>
+            <div class="header-right">
+                <div class="connection-status">
+                    <span class="connection-dot" id="wsDot"></span>
+                    <span id="wsStatus">CONNECTING</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- ── Main Content ─────────────────────────────────────── -->
+        <main class="main-content">
+            <div class="page-header" style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:20px;">
+                <div>
+                    <h1>Intrusion Alerts Ledger</h1>
+                    <p>Comprehensive event log of all detections, signatures, and behavioral triggers</p>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn btn-secondary" id="btnExportAlertsCsv">📥 Export CSV</button>
+                    <button class="btn btn-secondary" id="btnExportAlertsJson">📦 Export JSON</button>
+                    <button class="btn btn-primary" id="btnRefreshAlerts">🔄 Refresh</button>
+                </div>
+            </div>
+
+            <!-- Filter Toolbar -->
+            <div class="glass-panel" style="padding:16px; border-radius:12px; margin-bottom:20px; display:flex; flex-direction:column; gap:12px;">
+                <div style="display:grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap:10px;">
+                    <div>
+                        <label class="form-label" style="font-size:0.75rem;">Search</label>
+                        <input type="text" id="filterSearch" class="form-input" style="padding:8px 12px; font-size:0.85rem;" placeholder="Search IP, vector, description..." />
+                    </div>
+                    <div>
+                        <label class="form-label" style="font-size:0.75rem;">Severity</label>
+                        <select id="filterSeverity" class="attack-select" style="width:100%; padding:8px 10px;">
+                            <option value="">All Severities</option>
+                            <option value="high">High</option>
+                            <option value="medium">Medium</option>
+                            <option value="low">Low</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label" style="font-size:0.75rem;">Attack Type</label>
+                        <select id="filterAttackType" class="attack-select" style="width:100%; padding:8px 10px;">
+                            <option value="">All Attack Types</option>
+                            <option value="port_scan">Port Scan</option>
+                            <option value="brute_force">Brute Force</option>
+                            <option value="syn_flood">SYN Flood</option>
+                            <option value="sql_injection">SQL Injection</option>
+                            <option value="xss">XSS</option>
+                            <option value="log4shell">Log4Shell</option>
+                            <option value="cloud_ssrf">Cloud SSRF</option>
+                            <option value="path_traversal">Path Traversal</option>
+                            <option value="php_rce">PHP RCE</option>
+                            <option value="shellshock">Shellshock</option>
+                            <option value="http_request_smuggling">HTTP Smuggling</option>
+                            <option value="api_abuse">API Abuse</option>
+                            <option value="credential_stuffing">Credential Stuffing</option>
+                            <option value="jwt_attack">JWT Attack</option>
+                            <option value="dns_tunneling">DNS Tunneling</option>
+                            <option value="slowloris">Slowloris</option>
+                            <option value="udp_flood">UDP Flood</option>
+                            <option value="icmp_flood">ICMP Flood</option>
+                            <option value="command_injection">Command Injection</option>
+                            <option value="ldap_injection">LDAP Injection</option>
+                            <option value="xxe">XXE</option>
+                            <option value="ssti">SSTI</option>
+                            <option value="insecure_deserialization">Deserialization</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label" style="font-size:0.75rem;">Time Range</label>
+                        <select id="filterTime" class="attack-select" style="width:100%; padding:8px 10px;">
+                            <option value="">All Time</option>
+                            <option value="today">Today</option>
+                            <option value="24h">Last 24 Hours</option>
+                            <option value="7d">Last 7 Days</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label" style="font-size:0.75rem;">Mitigation</label>
+                        <select id="filterBlocked" class="attack-select" style="width:100%; padding:8px 10px;">
+                            <option value="">All Actions</option>
+                            <option value="true">Auto-Blocked Only</option>
+                            <option value="false">Alert Only</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.82rem; color:#94a3b8;">
+                    <div id="filterResultCount">Showing 0 alerts</div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span>Sort by:</span>
+                        <select id="sortColumn" class="attack-select" style="padding:4px 8px; font-size:0.8rem;">
+                            <option value="timestamp">Timestamp</option>
+                            <option value="severity">Severity</option>
+                            <option value="source_ip">Source IP</option>
+                        </select>
+                        <select id="sortDir" class="attack-select" style="padding:4px 8px; font-size:0.8rem;">
+                            <option value="desc">Descending</option>
+                            <option value="asc">Ascending</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Alerts Table -->
+            <div class="panel glass-panel" style="overflow-x:auto;">
+                <table class="data-table" id="alertsTable" style="width:100%;">
+                    <thead>
+                        <tr>
+                            <th style="width:70px;">ID</th>
+                            <th style="width:140px;">Timestamp</th>
+                            <th style="width:90px;">Severity</th>
+                            <th>Attack Type</th>
+                            <th style="width:140px;">Source IP</th>
+                            <th style="width:140px;">Dest IP</th>
+                            <th style="width:80px;">Port</th>
+                            <th style="width:70px;">Proto</th>
+                            <th>Description</th>
+                            <th style="width:100px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="alertsTableBody">
+                        <tr><td colspan="10" style="text-align:center; padding:30px; color:#64748b;">Loading alerts...</td></tr>
+                    </tbody>
+                </table>
+
+                <!-- Pagination -->
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-top:1px solid rgba(255,255,255,0.05);">
+                    <button class="btn btn-ghost" id="btnPrevPage" style="font-size:0.85rem;" disabled>← Previous</button>
+                    <span id="pageIndicator" style="font-size:0.85rem; color:#94a3b8;">Page 1</span>
+                    <button class="btn btn-ghost" id="btnNextPage" style="font-size:0.85rem;">Next →</button>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- ── Alert Investigation Modal ────────────────────────────── -->
+    <div class="modal-overlay" id="alertModal" style="display:none;">
+        <div class="modal-card" style="max-width:750px; width:90%; max-height:90vh; overflow-y:auto;">
+            <div class="modal-header">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:1.4rem;">🔍</span>
+                    <div>
+                        <h3 class="modal-title" id="modalAlertTitle">Alert Investigation #—</h3>
+                        <span id="modalSeverityBadge" class="badge">HIGH</span>
+                    </div>
+                </div>
+                <button class="modal-close" onclick="document.getElementById('alertModal').style.display='none'">✕</button>
+            </div>
+
+            <div class="modal-body" style="display:flex; flex-direction:column; gap:16px; padding:20px;">
+                
+                <!-- Plain-English Defensive Explanation -->
+                <div style="background:rgba(34,211,238,0.06); border:1px solid rgba(34,211,238,0.2); border-radius:8px; padding:14px 18px;">
+                    <h4 style="margin:0 0 6px 0; color:var(--cyan); font-size:0.9rem; display:flex; align-items:center; gap:6px;">
+                        <span>💡</span> Why was this considered malicious?
+                    </h4>
+                    <p id="modalMaliciousReason" style="margin:0; font-size:0.88rem; color:#e2e8f0; line-height:1.6;">
+                        Analysis explanation...
+                    </p>
+                </div>
+
+                <!-- Parameters Grid -->
+                <div class="modal-grid" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; font-size:0.85rem;">
+                    <div class="modal-field"><label>Alert ID</label><span id="modalAlertId">—</span></div>
+                    <div class="modal-field"><label>Timestamp</label><span id="modalTimestamp">—</span></div>
+                    <div class="modal-field"><label>Source IP</label><span id="modalSourceIp" style="font-family:monospace; color:#38bdf8;">—</span></div>
+                    <div class="modal-field"><label>Destination IP</label><span id="modalDestIp" style="font-family:monospace;">—</span></div>
+                    <div class="modal-field"><label>Destination Port</label><span id="modalDestPort">—</span></div>
+                    <div class="modal-field"><label>Protocol</label><span id="modalProtocol">—</span></div>
+                    <div class="modal-field"><label>Attack Category</label><span id="modalAttackType" style="font-weight:700;">—</span></div>
+                    <div class="modal-field"><label>Firewall Enforcement</label><span id="modalActionTaken">—</span></div>
+                </div>
+
+                <!-- Matched Reason & Signature -->
+                <div>
+                    <label class="form-label">Detection Reason / Signature</label>
+                    <div id="modalDescription" style="padding:10px 14px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.06); border-radius:6px; font-family:monospace; font-size:0.85rem; color:#f8fafc;">
+                        —
+                    </div>
+                </div>
+
+                <!-- Raw Packet Summary -->
+                <div>
+                    <label class="form-label">Raw Packet Telemetry</label>
+                    <div id="modalRawPacket" style="padding:10px 14px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.06); border-radius:6px; font-family:monospace; font-size:0.82rem; color:#94a3b8; word-break:break-all;">
+                        —
+                    </div>
+                </div>
+
+                <!-- Direct Attack Intel Link -->
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; padding-top:16px; border-top:1px solid rgba(255,255,255,0.06);">
+                    <button class="btn btn-ghost" onclick="document.getElementById('alertModal').style.display='none'">Close</button>
+                    <a id="modalAttackIntelLink" href="/attack-intelligence.html" class="btn btn-primary" style="display:flex; align-items:center; gap:6px;">
+                        <span>⚔️</span><span>View Attack Intelligence →</span>
+                    </a>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/common.js"></script>
+    <script src="/static/js/nav.js"></script>
+    <script src="/static/js/alerts.js"></script>
+</body>
+</html>

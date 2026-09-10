@@ -30,6 +30,12 @@ class Settings(BaseSettings):
 
     # ── Database ──────────────────────────────────────────────────
     DATABASE_URL: str = "sqlite+aiosqlite:///./ids_firewall.db"
+    DB_BUSY_TIMEOUT_MS: int = 30000        # 30-second busy timeout for concurrent transactions
+    DB_CACHE_SIZE_KB: int = 128000         # 128 MB RAM page cache for SQLite
+    DB_MAX_PAGE_COUNT: int = 2147483646    # Maximum allowable SQLite pages (~2TB capacity limit)
+    DB_MMAP_SIZE_BYTES: int = 30000000000  # 30 GB memory-mapped I/O support
+    DB_MAX_ALERTS_RETENTION: int = 100000  # Retention safety cap to prevent table exhaustion
+    DB_AUTO_CHECKPOINT_INTERVAL: int = 300 # Passive WAL checkpoint interval (seconds)
 
     # ── JWT Authentication ────────────────────────────────────────
     JWT_SECRET_KEY: str = "change-this-to-a-real-secret-key-in-production"

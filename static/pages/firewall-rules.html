@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firewall Policy & Rules — IDS Firewall</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+    <div class="dashboard-layout">
+        <!-- ── Sidebar ──────────────────────────────────────────── -->
+        <aside class="sidebar" id="sidebar"></aside>
+
+        <!-- ── Header ───────────────────────────────────────────── -->
+        <header class="header">
+            <div class="header-left">
+                <button class="mobile-menu-btn" onclick="document.getElementById('sidebar').classList.toggle('mobile-open')">☰</button>
+                <h2 class="header-title">📋 Firewall Policy & Access Control Lists</h2>
+            </div>
+            <div class="header-right">
+                <div class="connection-status">
+                    <span class="connection-dot" id="wsDot"></span>
+                    <span id="wsStatus">CONNECTING</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- ── Main Content ─────────────────────────────────────── -->
+        <main class="main-content">
+            
+            <!-- Firewall Command Center Status Strip -->
+            <div class="glass-panel" style="padding:14px 20px; border-radius:10px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+                <div style="display:flex; gap:20px; font-size:0.82rem; font-family:'JetBrains Mono',monospace;">
+                    <div><span style="color:#94a3b8;">Firewall Engine:</span> <strong id="fwEngineStatus" style="color:#10b981;">● ONLINE</strong></div>
+                    <div><span style="color:#94a3b8;">Backend API:</span> <strong style="color:#10b981;">● ONLINE</strong></div>
+                    <div><span style="color:#94a3b8;">Detectors:</span> <strong style="color:#38bdf8;">● 5 RUNNING</strong></div>
+                    <div><span style="color:#94a3b8;">ACL Rules:</span> <strong id="fwRuleCount" style="color:#f8fafc;">0 Active</strong></div>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn btn-secondary" id="btnRefreshRules">🔄 Refresh State</button>
+                    <button class="btn btn-primary" onclick="openAddRuleModal()">+ Add Firewall Rule</button>
+                </div>
+            </div>
+
+            <!-- Rules Table -->
+            <div class="panel glass-panel" style="overflow-x:auto;">
+                <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center;">
+                    <span class="panel-title">📜 Access Control List (ACL) — Evaluated First-Match-Wins</span>
+                </div>
+                <table class="data-table" id="rulesTable" style="width:100%;">
+                    <thead>
+                        <tr>
+                            <th style="width:70px;">Priority</th>
+                            <th>Chain</th>
+                            <th>Source Host</th>
+                            <th>Dest Port</th>
+                            <th>Protocol</th>
+                            <th>Action</th>
+                            <th>Type</th>
+                            <th>Duration</th>
+                            <th>Status</th>
+                            <th style="text-align:right;">Manage</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rulesTableBody">
+                        <tr><td colspan="10" style="text-align:center; padding:30px; color:#64748b;">Loading firewall rules...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- ── Add Rule Modal ───────────────────────────────────────── -->
+    <div class="modal-overlay" id="addRuleModal" style="display:none;">
+        <div class="modal-card" style="max-width:500px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Define Custom ACL Rule</h3>
+                <button class="modal-close" onclick="document.getElementById('addRuleModal').style.display='none'">✕</button>
+            </div>
+            <div class="modal-body" style="padding:20px; display:flex; flex-direction:column; gap:14px;">
+                <div style="display:grid; grid-template-columns: 2fr 1fr; gap:12px;">
+                    <div class="form-group">
+                        <label class="form-label">Source Host (IP or CIDR)</label>
+                        <input type="text" id="ruleSourceIp" class="form-input" placeholder="e.g. 198.51.100.22" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Priority</label>
+                        <input type="number" id="rulePriority" class="form-input" value="100" min="1" max="9999" />
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                    <div class="form-group">
+                        <label class="form-label">Destination Port</label>
+                        <input type="number" id="ruleDestPort" class="form-input" placeholder="Any / 80 / 443" min="1" max="65535" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Protocol</label>
+                        <select id="ruleProtocol" class="attack-select" style="width:100%;">
+                            <option value="">Any Protocol</option>
+                            <option value="tcp">TCP</option>
+                            <option value="udp">UDP</option>
+                            <option value="icmp">ICMP</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                    <div class="form-group">
+                        <label class="form-label">Verdict Action</label>
+                        <select id="ruleAction" class="attack-select" style="width:100%;">
+                            <option value="DROP">DROP (Block)</option>
+                            <option value="ACCEPT">ACCEPT (Allow)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Rule Duration</label>
+                        <select id="ruleDuration" class="attack-select" style="width:100%;">
+                            <option value="permanent">Permanent</option>
+                            <option value="temporary">Temporary (300s)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:15px;">
+                    <button class="btn btn-ghost" onclick="document.getElementById('addRuleModal').style.display='none'">Cancel</button>
+                    <button class="btn btn-primary" id="btnSubmitRule">Deploy Rule</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/common.js"></script>
+    <script src="/static/js/nav.js"></script>
+    <script src="/static/js/firewall.js"></script>
+</body>
+</html>

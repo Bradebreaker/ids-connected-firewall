@@ -9,11 +9,11 @@ import logging
 from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from sqlalchemy import select
+from sqlalchemy import select, func, delete, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.database import async_session
-from db.models import FirewallRule, BlockedIP
+from db.models import FirewallRule, BlockedIP, Alert
 from firewall.manager import FirewallManager
 
 logger = logging.getLogger("ids.firewall.scheduler")
@@ -76,12 +76,76 @@ async def expire_temporary_blocks(manager: FirewallManager):
             await db.rollback()
 
 
+async def maintain_database_health():
+    """
+    Periodic routine maintenance for SQLite database health:
+    1. Runs PRAGMA wal_checkpoint(PASSIVE) to merge committed WAL pages
+       back into the main database file without blocking active readers or writers.
+    2. Enforces alert retention: If total alerts exceed DB_MAX_ALERTS_RETENTION,
+       prunes the oldest resolved alerts (ordered deterministically by timestamp, id)
+       to prevent table exhaustion while preserving recent/active incidents.
+    """
+    from config import settings
+
+    async with async_session() as db:
+        # 1. Passive WAL checkpoint
+        try:
+            res = await db.execute(text("PRAGMA wal_checkpoint(PASSIVE);"))
+            row = res.fetchone()
+            logger.info("Routine WAL checkpoint (PASSIVE) executed: result=%s", row)
+        except Exception as e:
+            logger.warning("Routine WAL checkpoint error: %s", e)
+
+        # 2. Alert retention check
+        try:
+            count_res = await db.execute(select(func.count(Alert.id)))
+            total_alerts = count_res.scalar() or 0
+
+            max_retention = settings.DB_MAX_ALERTS_RETENTION
+            if total_alerts > max_retention:
+                excess = total_alerts - max_retention
+                logger.info(
+                    "Alert retention limit exceeded: %d total alerts (limit %d). Pruning %d oldest alerts.",
+                    total_alerts, max_retention, excess
+                )
+                # First try pruning oldest resolved alerts
+                subq_resolved = (
+                    select(Alert.id)
+                    .where(Alert.resolved == True)
+                    .order_by(Alert.timestamp.asc(), Alert.id.asc())
+                    .limit(excess)
+                )
+                resolved_ids = list((await db.execute(subq_resolved)).scalars().all())
+
+                ids_to_prune = resolved_ids
+                if len(ids_to_prune) < excess:
+                    needed = excess - len(ids_to_prune)
+                    subq_all = (
+                        select(Alert.id)
+                        .where(Alert.id.not_in(ids_to_prune) if ids_to_prune else True)
+                        .order_by(Alert.timestamp.asc(), Alert.id.asc())
+                        .limit(needed)
+                    )
+                    more_ids = list((await db.execute(subq_all)).scalars().all())
+                    ids_to_prune.extend(more_ids)
+
+                if ids_to_prune:
+                    del_stmt = delete(Alert).where(Alert.id.in_(ids_to_prune))
+                    await db.execute(del_stmt)
+                    await db.commit()
+                    logger.info("Retention maintenance: successfully pruned %d oldest alerts.", len(ids_to_prune))
+        except Exception as e:
+            logger.error("Alert retention maintenance error: %s", e)
+            await db.rollback()
+
+
 def create_scheduler(manager: FirewallManager) -> AsyncIOScheduler:
     """
     Create and configure the APScheduler for periodic tasks.
 
     Jobs:
         - expire_temporary_blocks: runs every BLOCK_EXPIRY_CHECK_INTERVAL seconds.
+        - maintain_database_health: runs every DB_AUTO_CHECKPOINT_INTERVAL seconds.
     """
     from config import settings
 
@@ -97,9 +161,19 @@ def create_scheduler(manager: FirewallManager) -> AsyncIOScheduler:
         replace_existing=True,
     )
 
+    scheduler.add_job(
+        maintain_database_health,
+        "interval",
+        seconds=settings.DB_AUTO_CHECKPOINT_INTERVAL,
+        id="maintain_database",
+        name="Routine WAL checkpoint & retention maintenance",
+        replace_existing=True,
+    )
+
     logger.info(
-        "Scheduler configured: block expiry check every %ds",
+        "Scheduler configured: block expiry every %ds, WAL/retention check every %ds",
         settings.BLOCK_EXPIRY_CHECK_INTERVAL,
+        settings.DB_AUTO_CHECKPOINT_INTERVAL,
     )
 
     return scheduler
